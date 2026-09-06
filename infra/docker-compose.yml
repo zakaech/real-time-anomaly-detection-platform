@@ -1,0 +1,153 @@
+# Development stack. Read the caveats before assuming anything here is
+# production-shaped:
+#
+#   * single broker  -> replication.factor = 1, min.insync.replicas = 1.
+#     This configuration LOSES DATA if the broker dies. Production values are
+#     documented in docs/03-kafka-topology.md section 4.
+#   * PLAINTEXT everywhere, no authentication, no TLS. The stack is reachable
+#     only through the local compose network and explicitly published ports.
+#
+# Run from the repository root:
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d
+#   docker compose --env-file .env -f infra/docker-compose.yml --profile tools up -d
+
+name: ${COMPOSE_PROJECT_NAME:-anomaly-platform}
+
+services:
+
+  kafka:
+    image: ${KAFKA_IMAGE}
+    container_name: anomaly-kafka
+    # KRaft combined mode: this node is both broker and controller. No ZooKeeper,
+    # which removes a container, a failure domain and a deprecated dependency.
+    environment:
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      # Three listeners: one for containers, one for the host, one for the
+      # KRaft controller quorum. The controller listener is never advertised.
+      #
+      # Bind hosts are EMPTY (`INTERNAL://:9092`), not `0.0.0.0`. Both mean
+      # "all interfaces", but they are not interchangeable here: in KRaft
+      # combined mode Kafka derives the controller's advertised endpoint from
+      # `listeners`, and the literal 0.0.0.0 then surfaces as an advertised
+      # address, which validation rejects:
+      #   advertised.listeners cannot use the nonroutable meta-address 0.0.0.0
+      # The broker crash-loops before it ever starts. Kafka's own shipped
+      # server.properties uses the empty-host form for the same reason.
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      # Single-node replication settings for the internal topics.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      # No rebalance delay: a developer restarting a consumer should not wait.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # An auto-created topic gets the broker default of one partition, and the
+      # partition count of an existing topic can never be reduced. Every topic
+      # is created explicitly by the kafka-init service instead.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS}
+    ports:
+      - "${KAFKA_EXTERNAL_PORT}:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      # Queries the broker API rather than checking that the process exists:
+      # a started container is not a ready broker.
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+    networks: [anomaly-net]
+    restart: unless-stopped
+
+  kafka-init:
+    image: ${KAFKA_IMAGE}
+    container_name: anomaly-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: ${KAFKA_INTERNAL_BOOTSTRAP}
+      TOPIC_TELEMETRY_RAW: ${KAFKA_TOPIC_TELEMETRY_RAW}
+      TOPIC_TELEMETRY_SCORED: ${KAFKA_TOPIC_TELEMETRY_SCORED}
+      TOPIC_ALERTS: ${KAFKA_TOPIC_ALERTS}
+      TOPIC_TELEMETRY_LABELS: ${KAFKA_TOPIC_TELEMETRY_LABELS}
+      TOPIC_TELEMETRY_DLQ: ${KAFKA_TOPIC_TELEMETRY_DLQ}
+      TOPIC_TELEMETRY_LATE: ${KAFKA_TOPIC_TELEMETRY_LATE}
+    volumes:
+      - ./kafka/create-topics.sh:/opt/create-topics.sh:ro
+    entrypoint: ["/bin/sh", "/opt/create-topics.sh"]
+    # One-shot job: it converges the topology and exits. Never restart it.
+    restart: "no"
+    networks: [anomaly-net]
+
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    container_name: anomaly-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Deterministic collation, so ORDER BY does not depend on the host locale.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No init SQL on purpose. The schema belongs to Flyway inside alert-service
+    # (docs/05-data-model.md section 3). A second source of DDL would guarantee
+    # divergence between what is migrated and what is created here.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [anomaly-net]
+    restart: unless-stopped
+
+  kafka-ui:
+    image: ${KAFKA_UI_IMAGE}
+    container_name: anomaly-kafka-ui
+    profiles: ["tools"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: ${COMPOSE_PROJECT_NAME:-anomaly-platform}
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_INTERNAL_BOOTSTRAP}
+      DYNAMIC_CONFIG_ENABLED: "false"
+    ports:
+      - "${KAFKA_UI_PORT}:8080"
+    networks: [anomaly-net]
+    restart: unless-stopped
+
+volumes:
+  kafka_data:
+  postgres_data:
+  # Declared now, consumed from step 4 on. Spark checkpoints must survive a
+  # container restart or recovery guarantees are void (docs/04 section 3).
+  spark_checkpoints:
+  # Model artifacts are immutable once published (docs/07 section 6).
+  model_artifacts:
+
+networks:
+  anomaly-net:
+    driver: bridge
