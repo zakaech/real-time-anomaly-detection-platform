@@ -3,8 +3,9 @@
 Plateforme temps réel de détection d'anomalies sur télémétrie de capteurs industriels : ingestion continue,
 enrichissement, scoring par modèle non supervisé, alertes persistées et workflow d'acquittement opérateur.
 
-**État : étape 1 terminée** — infrastructure (Kafka, PostgreSQL, topics) et bibliothèque partagée
-`telemetry-core`. Aucun composant métier n'est encore écrit.
+**État : Phase 1 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
+`telemetry-core`, et [`event-simulator`](event-simulator/) qui alimente `telemetry.raw` et `telemetry.labels`.
+Les phases suivantes (entraînement ML, Spark Structured Streaming, service Spring, dashboard) restent à écrire.
 
 ## Pile technique
 
@@ -40,6 +41,35 @@ Console d'exploration Kafka, optionnelle, sur `http://localhost:8085` :
 docker compose --env-file .env -f infra/docker-compose.yml --profile tools up -d
 ```
 
+## Produire des données
+
+Le simulateur est derrière un profil : `docker compose up` laisse la pile passive, et la génération reste
+un acte délibéré.
+
+```sh
+# temps réel, un échantillon par machine et par seconde
+docker compose --env-file .env -f infra/docker-compose.yml --profile sim up -d event-simulator
+
+# une heure d'historique, reproductible, aussi vite que possible
+docker run --rm --network anomaly-platform_anomaly-net \
+  -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+  event-simulator python -m event_simulator.main \
+  --mode replay --duration-seconds 3600 --seed 4242
+```
+
+Vérifier ce qui est réellement arrivé dans les topics — l'outil décode avec les contrats et mesure la
+distribution de retard dont la Phase 3 aura besoin pour régler son watermark :
+
+```sh
+docker run --rm --network anomaly-platform_anomaly-net \
+  -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+  event-simulator python -m event_simulator.tools.inspect --topic telemetry.raw
+
+docker run --rm --network anomaly-platform_anomaly-net \
+  -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+  event-simulator python -m event_simulator.tools.inspect --topic telemetry.labels
+```
+
 Vérifier la bibliothèque partagée (lint, format, typage strict, tests) :
 
 ```sh
@@ -67,6 +97,9 @@ Un `Makefile` regroupe ces commandes (`make up`, `make check`, `make clean`…) 
 
 Les contrats de messages font foi dans [`contracts/json-schema/`](contracts/json-schema/), et
 [`contracts/examples/`](contracts/examples/) contient les messages d'exemple rejoués par les tests.
+
+Chaque composant a son propre README : [`libs/telemetry-core/`](libs/telemetry-core/README.md),
+[`event-simulator/`](event-simulator/README.md).
 
 ## Sur les chiffres
 
