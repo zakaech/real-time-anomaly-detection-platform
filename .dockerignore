@@ -1,0 +1,16 @@
+# Keep the build context small. The context is the repository root because
+# component images need libs/ (see docs/08 section 1).
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+**/target
+**/dist
+docs
+.env
