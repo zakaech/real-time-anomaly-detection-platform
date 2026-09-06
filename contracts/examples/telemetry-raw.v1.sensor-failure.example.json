@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "event_id": "b1f4c2d0-9a3e-4c17-b8d5-2e6f0a9c1d47",
+  "machine_id": "M-007",
+  "line_id": "LINE-B",
+  "event_time": "2026-09-06T14:23:08.000Z",
+  "ingest_time": "2026-09-06T14:23:08.150Z",
+  "machine_state": "RUNNING",
+  "firmware_version": null,
+  "readings": {
+    "temperature_c": 68.1,
+    "vibration_mm_s": null,
+    "pressure_bar": 4.98,
+    "power_kw": 11.02,
+    "rotation_rpm": 1462.0
+  }
+}

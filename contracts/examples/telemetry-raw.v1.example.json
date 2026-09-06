@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "event_id": "5c0a3f8e-6f5b-4a0e-9d1c-8f2b7a1e4c93",
+  "machine_id": "M-014",
+  "line_id": "LINE-A",
+  "event_time": "2026-09-06T14:23:07.412Z",
+  "ingest_time": "2026-09-06T14:23:07.610Z",
+  "machine_state": "RUNNING",
+  "firmware_version": "2.3.1",
+  "readings": {
+    "temperature_c": 72.48,
+    "vibration_mm_s": 2.81,
+    "pressure_bar": 5.12,
+    "power_kw": 12.44,
+    "rotation_rpm": 1478.2
+  }
+}
