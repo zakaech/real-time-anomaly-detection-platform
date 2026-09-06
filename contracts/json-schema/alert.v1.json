@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zakaria/real-time-anomaly-detection-platform/contracts/alert.v1.json",
+  "title": "Alert",
+  "description": "Anomalie qualifiee, destinee a etre persistee et presentee a un operateur. Topic: alerts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "alert_id",
+    "machine_id",
+    "line_id",
+    "severity",
+    "anomaly_score",
+    "score_threshold",
+    "detected_at",
+    "window_start",
+    "window_end",
+    "published_at",
+    "model"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "alert_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "UUIDv5 deterministe derive de machine_id, window_start, model_name, model_version. Un rejeu produit le meme identifiant, ce qui rend la persistance idempotente."
+    },
+    "machine_id": { "type": "string", "pattern": "^M-[0-9]{3}$" },
+    "line_id": { "type": "string", "pattern": "^LINE-[A-Z]$" },
+    "severity": {
+      "type": "string",
+      "enum": ["MEDIUM", "HIGH", "CRITICAL"],
+      "description": "Calculee par le stream-processor a partir du depassement de seuil, du nombre de fenetres consecutives et de la criticite de la machine. Jamais recalculee en aval."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["NEW"],
+      "default": "NEW",
+      "description": "Toujours NEW a l'emission. Le cycle de vie appartient exclusivement au alert-service."
+    },
+    "anomaly_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "score_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+    "detected_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Egal a window_end. Temps d'evenement: quand la machine a devie, pas quand le calcul s'est termine."
+    },
+    "window_start": { "type": "string", "format": "date-time" },
+    "window_end": { "type": "string", "format": "date-time" },
+    "published_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Temps de traitement de la publication. detected_at moins published_at donne la latence de detection."
+    },
+    "consecutive_windows": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Nombre de fenetres consecutives au dessus du seuil ayant declenche l'alerte."
+    },
+    "top_contributors": {
+      "type": "array",
+      "default": [],
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "z_score"],
+        "properties": {
+          "feature": { "type": "string" },
+          "z_score": { "type": "number" }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "description": "Instantane du vecteur scoré, fige au moment de l'alerte. Permet d'expliquer une alerte des mois plus tard.",
+      "additionalProperties": { "type": ["number", "null"] }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "trained_at": { "type": ["string", "null"], "format": "date-time" },
+        "artifact_sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}
