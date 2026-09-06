@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zakaria/real-time-anomaly-detection-platform/contracts/telemetry-scored.v1.json",
+  "title": "ScoredEvent",
+  "description": "Resultat du scoring d'une fenetre glissante pour une machine. Topic: telemetry.scored",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "machine_id",
+    "line_id",
+    "window_start",
+    "window_end",
+    "scored_at",
+    "sample_count",
+    "is_scored",
+    "machine_state",
+    "model"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "machine_id": { "type": "string", "pattern": "^M-[0-9]{3}$" },
+    "line_id": { "type": "string", "pattern": "^LINE-[A-Z]$" },
+    "window_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Borne inferieure incluse de la fenetre, en temps d'evenement."
+    },
+    "window_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Borne superieure exclue de la fenetre, en temps d'evenement. Avec machine_id, forme la cle naturelle."
+    },
+    "scored_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Temps de traitement. Sert a mesurer la latence, jamais a fenetrer."
+    },
+    "sample_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Nombre d'echantillons agreges. Feature de qualite de donnee a part entiere."
+    },
+    "is_scored": {
+      "type": "boolean",
+      "description": "false signifie fenetre volontairement non scoree. Un silence et un resultat normal ne doivent jamais se confondre."
+    },
+    "skip_reason": {
+      "type": ["string", "null"],
+      "enum": [
+        "MACHINE_NOT_RUNNING",
+        "INSUFFICIENT_SAMPLES",
+        "MISSING_SENSOR_DATA",
+        "MODEL_UNAVAILABLE",
+        null
+      ],
+      "default": null,
+      "description": "Obligatoirement non null quand is_scored vaut false."
+    },
+    "machine_state": {
+      "type": "string",
+      "enum": ["RUNNING", "IDLE", "STARTING", "MAINTENANCE", "STOPPED", "UNKNOWN"],
+      "description": "Etat majoritaire sur la fenetre."
+    },
+    "anomaly_score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Score calibre par ECDF sur la distribution d'entrainement. 0.995 signifie: plus extreme que 99,5 pourcent des fenetres de reference."
+    },
+    "raw_score": {
+      "type": ["number", "null"],
+      "description": "Sortie native du modele, non bornee et non comparable entre versions. Conservee pour l'audit."
+    },
+    "score_threshold": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Seuil applique. Publie avec le score car un score sans son seuil n'est pas interpretable."
+    },
+    "is_anomaly": {
+      "type": ["boolean", "null"],
+      "description": "anomaly_score superieur ou egal a score_threshold. Ne declenche pas seul une alerte, voir consecutive_windows."
+    },
+    "consecutive_windows": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Nombre de fenetres consecutives au dessus du seuil pour cette machine. Base de l'hysteresis anti-rafale."
+    },
+    "top_contributors": {
+      "type": "array",
+      "default": [],
+      "maxItems": 5,
+      "description": "Features les plus ecartees du profil de reference. Explicabilite de l'alerte.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "z_score"],
+        "properties": {
+          "feature": { "type": "string" },
+          "z_score": { "type": "number" }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "description": "Vecteur reellement soumis au modele. Publie pour permettre le rejeu hors ligne sans recalcul de fenetre.",
+      "additionalProperties": { "type": ["number", "null"] }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "trained_at": { "type": ["string", "null"], "format": "date-time" },
+        "artifact_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Empreinte de l'artefact charge par l'executeur. Preuve qu'entrainement et scoring utilisent le meme binaire."
+        }
+      }
+    },
+    "processing_delay_ms": {
+      "type": "integer",
+      "description": "scored_at moins window_end en millisecondes. Latence de bout en bout observee."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "is_scored": { "const": false } }, "required": ["is_scored"] },
+      "then": { "properties": { "skip_reason": { "type": "string" } }, "required": ["skip_reason"] }
+    },
+    {
+      "if": { "properties": { "is_scored": { "const": true } }, "required": ["is_scored"] },
+      "then": { "required": ["anomaly_score", "score_threshold", "is_anomaly", "features"] }
+    }
+  ]
+}

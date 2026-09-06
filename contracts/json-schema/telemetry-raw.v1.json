@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zakaria/real-time-anomaly-detection-platform/contracts/telemetry-raw.v1.json",
+  "title": "TelemetryRaw",
+  "description": "Un echantillon de telemetrie brute produit par une machine. Topic: telemetry.raw",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "machine_id",
+    "line_id",
+    "event_time",
+    "ingest_time",
+    "machine_state",
+    "readings"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "Version majeure.mineure du contrat. La majeure est verrouillee a 1 pour ce topic."
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Identifiant unique de l'echantillon. Cle d'idempotence de bout en bout."
+    },
+    "machine_id": {
+      "type": "string",
+      "pattern": "^M-[0-9]{3}$",
+      "description": "Identifiant de la machine. Sert egalement de cle de partition Kafka."
+    },
+    "line_id": {
+      "type": "string",
+      "pattern": "^LINE-[A-Z]$",
+      "description": "Ligne de production. Denormalise volontairement pour eviter une jointure en streaming."
+    },
+    "event_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Instant reel de la mesure, horloge capteur. ISO-8601 UTC millisecondes, suffixe Z. Base du fenetrage."
+    },
+    "ingest_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Instant d'envoi vers Kafka par le producteur. La difference avec event_time mesure le retard a la source."
+    },
+    "machine_state": {
+      "type": "string",
+      "enum": ["RUNNING", "IDLE", "STARTING", "MAINTENANCE", "STOPPED", "UNKNOWN"],
+      "description": "Etat operationnel. UNKNOWN est la valeur de repli obligatoire des consommateurs pour tolerer un ajout futur."
+    },
+    "firmware_version": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Optionnel. Permet de correler une derive de distribution avec une mise a jour d'automate."
+    },
+    "readings": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Grandeurs mesurees. null signifie capteur indisponible, jamais 0.",
+      "required": [
+        "temperature_c",
+        "vibration_mm_s",
+        "pressure_bar",
+        "power_kw",
+        "rotation_rpm"
+      ],
+      "properties": {
+        "temperature_c": {
+          "type": ["number", "null"],
+          "minimum": -50,
+          "maximum": 300,
+          "description": "Temperature du carter en degres Celsius."
+        },
+        "vibration_mm_s": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Vitesse vibratoire efficace en mm/s (ISO 10816)."
+        },
+        "pressure_bar": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 50,
+          "description": "Pression du circuit hydraulique en bar."
+        },
+        "power_kw": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 500,
+          "description": "Puissance active consommee en kW."
+        },
+        "rotation_rpm": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 6000,
+          "description": "Regime moteur en tours par minute."
+        }
+      }
+    }
+  }
+}

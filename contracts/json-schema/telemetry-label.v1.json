@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zakaria/real-time-anomaly-detection-platform/contracts/telemetry-label.v1.json",
+  "title": "TelemetryLabel",
+  "description": "Verite terrain associee a un echantillon ou a une fenetre. Topic: telemetry.labels. Ce flux n'est JAMAIS consomme par le stream-processor: il n'existe que pour l'evaluation hors ligne et le suivi de derive.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "machine_id",
+    "event_time",
+    "is_anomaly",
+    "source",
+    "emitted_at"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "event_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "default": null,
+      "description": "Renseigne quand l'etiquette porte sur un echantillon precis (source SIMULATOR). Null quand elle porte sur une alerte (source OPERATOR)."
+    },
+    "alert_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "default": null,
+      "description": "Renseigne quand l'etiquette provient du verdict d'un operateur sur une alerte."
+    },
+    "machine_id": { "type": "string", "pattern": "^M-[0-9]{3}$" },
+    "event_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Temps d'evenement etiquete. Permet la jointure avec les fenetres scorees."
+    },
+    "is_anomaly": {
+      "type": "boolean",
+      "description": "Verite terrain. Pour source OPERATOR, false signifie faux positif confirme."
+    },
+    "anomaly_type": {
+      "type": ["string", "null"],
+      "enum": [
+        "BEARING_WEAR",
+        "OVERHEAT",
+        "PRESSURE_DROP",
+        "POWER_SURGE",
+        "MOTOR_STALL",
+        "SENSOR_STUCK",
+        "SENSOR_DROPOUT",
+        "UNKNOWN",
+        null
+      ],
+      "default": null
+    },
+    "episode_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Regroupe tous les echantillons d'une meme occurrence d'anomalie. Permet de compter les episodes detectes plutot que les points, seule metrique qui parle a un exploitant."
+    },
+    "episode_started_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "default": null,
+      "description": "Debut de l'episode. La difference avec l'horodatage de la premiere alerte donne la latence de detection."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["SIMULATOR", "OPERATOR", "MAINTENANCE_LOG"],
+      "description": "SIMULATOR: verite terrain synthetique, disponible immediatement. OPERATOR: verdict humain, en retard de minutes a heures. MAINTENANCE_LOG: rapport d'intervention, en retard de jours."
+    },
+    "operator_id": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Auteur du verdict quand source vaut OPERATOR."
+    },
+    "root_cause_code": { "type": ["string", "null"], "default": null },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Instant de production de l'etiquette. Toujours posterieur a event_time, souvent tres largement: c'est la nature meme d'une etiquette en production."
+    }
+  }
+}
