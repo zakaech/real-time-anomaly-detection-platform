@@ -1,0 +1,234 @@
+# Simulated machine fleet.
+#
+# Each machine carries two clearly separated blocks, and the separation is not
+# cosmetic (decision D-19):
+#
+#   nominal    -- the DECLARED operating ranges. This is what a real plant knows
+#                 about its machines, and the only block that will later be
+#                 extracted into the Flyway seed for the `machine` table.
+#
+#   simulation -- the TRUE physics: noise sigmas, coupling coefficients, wear
+#                 rate. Nobody knows these values in production. Exposing them
+#                 to the platform would be a form of information leak into the
+#                 design itself, so they never leave the simulator.
+#
+# Values here are plausible orders of magnitude for industrial rotating
+# machinery, not measurements. They exist to produce a coherent multivariate
+# signal, not to model a specific machine.
+
+defaults:
+  # Physical coupling shared by every profile unless overridden. The point of
+  # these coefficients is that power, vibration and temperature are DERIVED from
+  # a hidden load and a hidden wear level rather than drawn independently.
+  # Independent noise on five sensors would contain no multivariate anomaly at
+  # all, and the Phase 2 model would have nothing to learn that a per-sensor
+  # threshold does not already find.
+  simulation:
+    load:
+      mean: 0.62
+      sigma: 0.035          # per-tick innovation of the Ornstein-Uhlenbeck process
+      reversion: 0.04       # pull back towards the mean, per tick
+      daily_amplitude: 0.12 # production is heavier during the day
+    wear:
+      initial: 0.05
+      rate_per_hour: 0.0025 # the slow trend; drives power_per_rpm upwards
+      max: 1.0
+    ambient:
+      mean_c: 21.0
+      daily_amplitude_c: 4.5
+      peak_hour_utc: 15
+    thermal_inertia: 0.06   # first-order lag: temperature follows power slowly
+    noise:
+      temperature_c: 0.30
+      vibration_mm_s: 0.045
+      pressure_bar: 0.035
+      power_kw: 0.14
+      rotation_rpm: 3.5
+    lifecycle:
+      # Mean residence time per state, in seconds. RUNNING dominates; the other
+      # states exist so machine_state carries information for Phase 3 rather
+      # than being a constant.
+      running_seconds: 900
+      idle_seconds: 90
+      starting_seconds: 25
+      maintenance_seconds: 240
+      idle_probability: 0.80        # share of RUNNING exits that go to IDLE
+      maintenance_probability: 0.20 # the rest go to MAINTENANCE
+
+profiles:
+  # --- high-speed spindle -------------------------------------------------
+  spindle:
+    machine_type: CNC_SPINDLE
+    criticality: HIGH
+    nominal:
+      temperature_c: { min: 45.0, max: 85.0 }
+      vibration_mm_s: { min: 0.4, max: 4.5 }
+      pressure_bar: { min: 3.5, max: 7.0 }
+      power_kw: { min: 4.0, max: 22.0 }
+      rotation_rpm: { min: 1200.0, max: 1800.0 }
+    simulation:
+      rated_rpm: 1500.0
+      coefficients:
+        power_base_kw: 1.1
+        power_per_rpm: 0.0068
+        power_wear_per_rpm: 0.0015
+        vibration_base_mm_s: 0.55
+        vibration_per_load: 1.25
+        vibration_per_wear: 4.2
+        pressure_base_bar: 3.6
+        pressure_per_load: 2.4
+        temperature_per_kw: 4.2
+
+  # --- hydraulic pump -----------------------------------------------------
+  pump:
+    machine_type: HYDRAULIC_PUMP
+    criticality: MEDIUM
+    nominal:
+      temperature_c: { min: 35.0, max: 70.0 }
+      vibration_mm_s: { min: 0.3, max: 3.2 }
+      pressure_bar: { min: 8.0, max: 16.0 }
+      power_kw: { min: 2.5, max: 14.0 }
+      rotation_rpm: { min: 900.0, max: 1300.0 }
+    simulation:
+      rated_rpm: 1100.0
+      coefficients:
+        power_base_kw: 0.8
+        power_per_rpm: 0.0062
+        power_wear_per_rpm: 0.0012
+        vibration_base_mm_s: 0.40
+        vibration_per_load: 0.95
+        vibration_per_wear: 3.1
+        pressure_base_bar: 8.5
+        pressure_per_load: 6.2
+        temperature_per_kw: 4.5
+      wear:
+        rate_per_hour: 0.0018
+
+  # --- conveyor drive -----------------------------------------------------
+  conveyor:
+    machine_type: CONVEYOR_DRIVE
+    criticality: LOW
+    nominal:
+      temperature_c: { min: 25.0, max: 60.0 }
+      vibration_mm_s: { min: 0.2, max: 2.6 }
+      pressure_bar: { min: 1.0, max: 4.0 }
+      power_kw: { min: 1.0, max: 8.0 }
+      rotation_rpm: { min: 600.0, max: 950.0 }
+    simulation:
+      rated_rpm: 800.0
+      coefficients:
+        power_base_kw: 0.5
+        power_per_rpm: 0.0052
+        power_wear_per_rpm: 0.0009
+        vibration_base_mm_s: 0.30
+        vibration_per_load: 0.80
+        vibration_per_wear: 2.4
+        pressure_base_bar: 1.2
+        pressure_per_load: 1.9
+        temperature_per_kw: 4.0
+      lifecycle:
+        running_seconds: 1800
+        idle_seconds: 45
+
+machines:
+  - { machine_id: M-001, line_id: LINE-A, profile: spindle,  firmware_version: "2.3.1" }
+  - { machine_id: M-002, line_id: LINE-A, profile: spindle,  firmware_version: "2.3.1" }
+  - { machine_id: M-003, line_id: LINE-A, profile: pump,     firmware_version: "1.9.4" }
+  - { machine_id: M-004, line_id: LINE-A, profile: conveyor, firmware_version: "1.4.0" }
+  - { machine_id: M-005, line_id: LINE-A, profile: spindle,  firmware_version: "2.2.8" }
+  - { machine_id: M-006, line_id: LINE-B, profile: pump,     firmware_version: "1.9.4" }
+  - { machine_id: M-007, line_id: LINE-B, profile: spindle,  firmware_version: "2.3.1" }
+  - { machine_id: M-008, line_id: LINE-B, profile: conveyor, firmware_version: "1.4.0" }
+  - { machine_id: M-009, line_id: LINE-B, profile: pump,     firmware_version: "2.0.1" }
+  - { machine_id: M-010, line_id: LINE-B, profile: spindle,  firmware_version: "2.3.1" }
+  - { machine_id: M-011, line_id: LINE-C, profile: conveyor, firmware_version: "1.4.0" }
+  - { machine_id: M-012, line_id: LINE-C, profile: spindle,  firmware_version: "2.3.1" }
+  - { machine_id: M-013, line_id: LINE-C, profile: pump,     firmware_version: "1.9.4" }
+  - { machine_id: M-014, line_id: LINE-C, profile: spindle,  firmware_version: "2.3.1" }
+  - { machine_id: M-015, line_id: LINE-C, profile: conveyor, firmware_version: "1.5.2" }
+
+anomalies:
+  enabled: true
+  # Poisson rate per machine. With 15 machines this is roughly one episode every
+  # few minutes across the fleet -- frequent enough to build an evaluation set
+  # quickly in replay mode, rare enough that normal behaviour dominates.
+  episodes_per_hour: 1.5
+  min_gap_seconds: 120
+  # Anomalies stay inside the physically valid ranges of the contract. A
+  # temperature of 812 C is a broken sensor, not a machine anomaly, and a model
+  # that "detects" it has learned nothing (docs/07 section 1, guard 2).
+  types:
+    - type: OVERHEAT
+      family: SPIKE
+      weight: 1.0
+      sensor: temperature_c
+      duration_seconds: { min: 4, max: 12 }
+      intensity: { min: 14.0, max: 26.0 }
+
+    - type: POWER_SURGE
+      family: SPIKE
+      weight: 0.8
+      sensor: power_kw
+      duration_seconds: { min: 2, max: 6 }
+      intensity: { min: 5.0, max: 11.0 }
+
+    - type: PRESSURE_DROP
+      family: SPIKE
+      weight: 0.8
+      sensor: pressure_bar
+      duration_seconds: { min: 5, max: 15 }
+      intensity: { min: -3.5, max: -1.4 }
+
+    - type: BEARING_WEAR
+      family: DRIFT
+      weight: 1.2
+      sensor: null            # acts on hidden wear, so every coupled sensor moves
+      duration_seconds: { min: 180, max: 600 }
+      intensity: { min: 0.35, max: 0.85 }
+
+    - type: MOTOR_STALL
+      family: DRIFT
+      weight: 0.6
+      sensor: rotation_rpm
+      duration_seconds: { min: 60, max: 240 }
+      intensity: { min: -0.28, max: -0.12 }
+
+    - type: SENSOR_STUCK
+      family: SENSOR_FAILURE
+      weight: 0.7
+      sensor: vibration_mm_s
+      duration_seconds: { min: 45, max: 180 }
+      intensity: { min: 0.0, max: 0.0 }
+
+    - type: SENSOR_DROPOUT
+      family: SENSOR_FAILURE
+      weight: 0.7
+      sensor: pressure_bar
+      duration_seconds: { min: 20, max: 90 }
+      intensity: { min: 0.0, max: 0.0 }
+
+  # Deterministic episodes, injected regardless of the Poisson draw. Useful for
+  # demonstrations and for reproducing a specific case; offsets are relative to
+  # the start of the run.
+  scenarios: []
+
+late_data:
+  # Publication delay, not back-dating (decision D-23). The sample keeps the
+  # event_time at which it was measured; only its publication is held back, the
+  # way a buffering gateway behaves. That is what produces genuinely
+  # out-of-order data inside a partition for the Phase 3 watermark work.
+  enabled: true
+  jitter:
+    probability: 0.015
+    delay_seconds: { min: 1.0, max: 9.0 }
+  outage:
+    # A machine goes silent, then flushes its buffer in one burst. This is the
+    # case that actually stresses a watermark; per-event jitter alone does not.
+    probability_per_hour: 0.35
+    duration_seconds: { min: 20.0, max: 75.0 }
+
+labels:
+  # Ground truth for anomalous samples only (decision D-22). Normal is the
+  # complement: episodes carry explicit bounds, so any event remains
+  # identifiable without doubling the volume of the label stream.
+  emit_normal_labels: false
