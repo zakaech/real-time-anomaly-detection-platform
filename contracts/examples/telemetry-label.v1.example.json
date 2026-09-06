@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "event_id": "5c0a3f8e-6f5b-4a0e-9d1c-8f2b7a1e4c93",
+  "alert_id": null,
+  "machine_id": "M-014",
+  "event_time": "2026-09-06T14:23:07.412Z",
+  "is_anomaly": true,
+  "anomaly_type": "BEARING_WEAR",
+  "episode_id": "ep-20260906-M014-003",
+  "episode_started_at": "2026-09-06T14:18:00.000Z",
+  "source": "SIMULATOR",
+  "operator_id": null,
+  "root_cause_code": null,
+  "emitted_at": "2026-09-06T14:23:07.500Z"
+}

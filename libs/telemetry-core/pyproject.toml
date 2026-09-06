@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telemetry-core"
+version = "0.1.0"
+description = "Shared contracts, codecs and feature specification for the anomaly detection platform"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+
+# A library declares ranges; an application pins (decision D-16). Every runtime
+# dependency here is shipped to Spark executors, so the list stays deliberately
+# short: numpy for the reference feature implementation, and two small
+# operational libraries used on the driver side only.
+dependencies = [
+    "numpy>=1.24,<3.0",
+    "pydantic-settings>=2.2,<3.0",
+    "structlog>=24.1,<26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "jsonschema>=4.21,<5.0",
+    "mypy>=1.10,<2.0",
+    "ruff>=0.6,<1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+telemetry_core = ["py.typed"]
+
+# ---------------------------------------------------------------------------
+# ruff: replaces flake8 + isort + black with a single tool and one config.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "A",         # builtin shadowing
+    "C4",        # comprehensions
+    "DTZ",       # naive datetime usage -- central to this project
+    "RUF",
+]
+ignore = [
+    # Long comments are load-bearing here: they carry the design rationale.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert on magic values by nature; that is the point of a golden test.
+"tests/*" = ["N802"]
+
+# ---------------------------------------------------------------------------
+# mypy: strict. The brief asks for typed code, and without --strict typing is
+# decorative: untyped defs and implicit Any silently pass.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_no_return = true
+show_error_codes = true
+disallow_any_unimported = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+# jsonschema ships partial stubs; tests only use validate().
+module = "jsonschema.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"

@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "machine_id": "M-014",
+  "line_id": "LINE-A",
+  "window_start": "2026-09-06T14:22:10.000Z",
+  "window_end": "2026-09-06T14:23:10.000Z",
+  "scored_at": "2026-09-06T14:23:41.905Z",
+  "sample_count": 58,
+  "is_scored": true,
+  "skip_reason": null,
+  "machine_state": "RUNNING",
+  "anomaly_score": 0.9962,
+  "raw_score": -0.0731,
+  "score_threshold": 0.995,
+  "is_anomaly": true,
+  "consecutive_windows": 2,
+  "top_contributors": [
+    { "feature": "vibration_mm_s_stddev", "z_score": 4.21 },
+    { "feature": "power_per_rpm_mean", "z_score": 3.08 }
+  ],
+  "features": {
+    "temperature_c_mean": 72.4,
+    "vibration_mm_s_stddev": 0.94,
+    "power_per_rpm_mean": 0.0084
+  },
+  "model": {
+    "name": "isolation_forest",
+    "version": "1.3.0",
+    "trained_at": "2026-09-01T08:00:00.000Z",
+    "artifact_sha256": "9f2c1b7d4e6a8093c5f21e0da4b7c68931f5a2e0cd47b91836f2a0d5e7c41b9a"
+  },
+  "processing_delay_ms": 31905
+}
