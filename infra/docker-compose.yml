@@ -139,6 +139,38 @@ services:
     networks: [anomaly-net]
     restart: unless-stopped
 
+  event-simulator:
+    build:
+      # The repository root: the simulator needs libs/telemetry-core and
+      # contracts/, which live above its own directory (docs/08 section 1).
+      context: ..
+      dockerfile: event-simulator/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-anomaly-platform}/event-simulator:dev
+    container_name: anomaly-event-simulator
+    # Behind a profile on purpose: `docker compose up` leaves the stack passive,
+    # and producing data stays a deliberate act.
+    #   docker compose --profile sim up -d event-simulator
+    profiles: ["sim"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_INTERNAL_BOOTSTRAP}
+      KAFKA_TOPIC_TELEMETRY_RAW: ${KAFKA_TOPIC_TELEMETRY_RAW}
+      KAFKA_TOPIC_TELEMETRY_LABELS: ${KAFKA_TOPIC_TELEMETRY_LABELS}
+      SIMULATOR_MODE: ${SIMULATOR_MODE:-realtime}
+      SIMULATOR_FLEET_PATH: config/fleet.yaml
+      SIMULATOR_TICK_INTERVAL_SECONDS: ${SIMULATOR_TICK_INTERVAL_SECONDS:-1.0}
+      SIMULATOR_SEED: ${SIMULATOR_SEED:-}
+      SIMULATOR_DURATION_SECONDS: ${SIMULATOR_DURATION_SECONDS:-}
+      SIMULATOR_MAX_EVENTS: ${SIMULATOR_MAX_EVENTS:-}
+      SIMULATOR_SPEED_FACTOR: ${SIMULATOR_SPEED_FACTOR:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks: [anomaly-net]
+    restart: "no"
+
 volumes:
   kafka_data:
   postgres_data:
