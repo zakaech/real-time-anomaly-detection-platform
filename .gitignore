@@ -1,0 +1,47 @@
+# Secrets and local configuration -- .env.example is versioned, .env never is.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Java / Maven
+target/
+*.class
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# Spark local artifacts
+spark-warehouse/
+checkpoints/
+derby.log
+metastore_db/
+
+# Model artifacts are produced, never committed. Only their metadata is.
+models/**/*.joblib
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
