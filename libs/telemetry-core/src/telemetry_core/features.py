@@ -4,33 +4,46 @@ This module is the countermeasure to training/serving skew, and it is worth
 being precise about how -- because the obvious framing is wrong.
 
 Spark computes aggregations with Spark SQL over distributed columns; the
-training pipeline computes them with pandas or NumPy over a local frame. Those
-two cannot literally be the same code. So the shared artefact is not one
-implementation, it is:
+training pipeline computes them with pandas over a local frame. Those two cannot
+literally be the same code. So the shared artefact is not one implementation, it
+is:
 
-1. :data:`FEATURE_SPECS` -- a declarative specification (name, source signal,
-   aggregation, canonical order) with no engine dependency at all;
+1. :data:`FEATURE_SPECS` and :data:`CORRELATION_PAIRS` -- a declarative
+   specification with no engine dependency at all;
 2. :func:`compute_features` -- a reference implementation that fixes the exact
    semantics of every aggregation;
-3. a conformance test, added with the Spark job in step 4, asserting that the
-   Spark translation of the same specification reproduces the reference output
-   on identical input.
+3. conformance tests asserting that each engine's translation reproduces the
+   reference output on identical input. The pandas translation is checked in
+   ``ml-training``; the Spark one will be checked the same way.
 
 Skew is therefore prevented by a shared specification plus a proof of
 equivalence, not by a shared function that cannot exist.
 
-Two semantic decisions are pinned here because they silently differ between
-engines and would otherwise produce a model scoring on a distribution it never
-saw:
+Semantics that engines disagree on silently, pinned here
+--------------------------------------------------------
 
 * **Standard deviation uses ddof=1** (sample standard deviation). ``numpy.std``
   defaults to ddof=0, ``pandas.Series.std`` to ddof=1, and Spark's ``stddev`` is
   ``stddev_samp``, i.e. ddof=1. Left unpinned, training and serving would divide
   by different denominators.
+
+* **"First" and "last" mean min_by/max_by over event time, never Spark's
+  ``first()``/``last()``.** Those two are explicitly non-deterministic: their
+  result depends on row order, which is not guaranteed after a shuffle. A
+  conformance test built on them would fail intermittently, which is the worst
+  possible failure mode. The specification is therefore expressed as
+  ``min_by(value, event_time)`` and ``max_by(value, event_time)``, deterministic
+  provided ``(machine_id, event_time)`` is unique -- a property the producer
+  guarantees and the test suite asserts.
+
 * **Ratios are computed per sample, then aggregated.** The mean of a ratio is
-  not the ratio of the means. ``power_per_rpm`` must be averaged over
-  per-instant ratios, which is what carries the physical meaning: rising power
-  at constant speed is a friction signature.
+  not the ratio of the means. ``power_per_rpm`` must be averaged over per-instant
+  ratios, which is what carries the physical meaning: rising power at constant
+  speed is a friction signature.
+
+* **Correlations use pairwise deletion** and are undefined -- ``None``, never
+  zero -- when either signal has no variance inside the window. A frozen sensor
+  therefore produces a null correlation, which is itself the signal.
 """
 
 from __future__ import annotations
@@ -46,33 +59,47 @@ from telemetry_core.schemas import SENSOR_NAMES, SensorReadings
 from telemetry_core.timeutil import to_epoch_millis
 
 __all__ = [
+    "CORRELATION_PAIRS",
     "DERIVED_SIGNALS",
     "FEATURE_NAMES",
     "FEATURE_SET_VERSION",
     "FEATURE_SPECS",
+    "MIN_RUNNING_RATIO",
     "MIN_SAMPLES_FOR_SCORING",
+    "QUALITY_FEATURE_NAMES",
     "AggregationKind",
+    "CorrelationSpec",
     "FeatureSpec",
     "WindowSample",
     "compute_features",
     "derived_signal_value",
+    "pearson_correlation",
 ]
 
-#: Bumped whenever the specification changes. Recorded in the model artefact:
-#: a model trained on one feature set must never score with another.
-FEATURE_SET_VERSION = "1.0.0"
+#: Bumped whenever the specification changes, and recorded in the model
+#: artefact. A model trained on one feature set must never score with another:
+#: the columns would not mean what the model learned, and nothing would fail
+#: loudly. Version 2.0.0 added deviation-from-mean, the within-window z-score,
+#: cross-sensor correlations and a slope on the derived signals, and restated
+#: the slope in terms of min_by/max_by.
+FEATURE_SET_VERSION = "2.0.0"
 
 #: Minimum samples in a 60 s window before it is worth scoring. Below this the
-#: aggregates are dominated by noise and generate false positives. The value is
-#: a starting point to be revised against measurement, not a measured result.
+#: aggregates are dominated by noise and generate false positives. A starting
+#: point to be revised against measurement, not a measured result.
 MIN_SAMPLES_FOR_SCORING = 30
+
+#: Minimum share of RUNNING samples for a window to be scored at all. High
+#: vibration during a start-up is normal; scoring those windows would produce
+#: false positives that say nothing about machine health.
+MIN_RUNNING_RATIO = 0.9
 
 
 class AggregationKind(StrEnum):
-    """Aggregation applied to a signal over one window.
+    """Aggregation applied to one signal over one window.
 
-    Each member names an exact semantic, not an approximate one; the Spark
-    translation in step 4 maps these to specific Spark SQL functions.
+    Each member names an exact semantic, not an approximate one; every engine
+    translation maps these to specific functions.
     """
 
     MEAN = "mean"
@@ -84,9 +111,17 @@ class AggregationKind(StrEnum):
     #: Forest splits on single axes and cannot compute a difference between two
     #: features, so the spread is only visible if it is given its own axis.
     RANGE = "range"
-    #: (last - first) / elapsed_seconds. A slow drift is invisible to mean and
-    #: to standard deviation, and it is exactly what bearing wear looks like.
+    #: (max_by(v, t) - min_by(v, t)) / elapsed_seconds. A slow drift is invisible
+    #: to the mean and to the standard deviation, and it is exactly what bearing
+    #: wear looks like.
     SLOPE = "slope_per_second"
+    #: max_by(v, t) - avg(v): how far the latest reading sits from the window's
+    #: own moving average. Catches a departure that has not yet moved the mean.
+    DEVIATION_FROM_MEAN = "deviation_from_mean"
+    #: The same departure, in units of the window's own dispersion. It gets its
+    #: own axis rather than being left derivable, because an axis-aligned split
+    #: cannot divide one feature by another.
+    ZSCORE_LAST = "zscore_last"
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +136,19 @@ class FeatureSpec:
         return f"{self.signal}_{self.aggregation.value}"
 
 
+@dataclass(frozen=True, slots=True)
+class CorrelationSpec:
+    """A Pearson correlation between two sensors, inside one window."""
+
+    left: str
+    right: str
+    rationale: str
+
+    @property
+    def name(self) -> str:
+        return f"corr_{self.left}__{self.right}"
+
+
 #: Signals derived per sample before aggregation.
 #:
 #: ``power_per_rpm`` is the specific consumption: power rising at constant speed
@@ -110,6 +158,24 @@ class FeatureSpec:
 #: its place here (docs/07-ml-methodology.md section 2.2).
 DERIVED_SIGNALS: tuple[str, ...] = ("power_per_rpm", "vibration_per_rpm")
 
+#: Cross-sensor correlations, chosen for physical meaning rather than taken
+#: exhaustively. All ten pairs of five sensors would add dimensional noise with
+#: no hypothesis behind it; each pair below breaks under a specific failure.
+CORRELATION_PAIRS: tuple[CorrelationSpec, ...] = (
+    CorrelationSpec(
+        "power_kw", "rotation_rpm", "core electromechanical coupling; breaks on a motor stall"
+    ),
+    CorrelationSpec(
+        "vibration_mm_s", "rotation_rpm", "rotating imbalance; breaks when vibration decouples"
+    ),
+    CorrelationSpec(
+        "temperature_c", "power_kw", "thermal coupling; breaks on a temperature sensor fault"
+    ),
+    CorrelationSpec(
+        "pressure_bar", "rotation_rpm", "hydraulic coupling; breaks on a leak or a stuck sensor"
+    ),
+)
+
 _BASE_AGGREGATIONS: tuple[AggregationKind, ...] = (
     AggregationKind.MEAN,
     AggregationKind.STDDEV,
@@ -117,11 +183,18 @@ _BASE_AGGREGATIONS: tuple[AggregationKind, ...] = (
     AggregationKind.MAX,
     AggregationKind.RANGE,
     AggregationKind.SLOPE,
+    AggregationKind.DEVIATION_FROM_MEAN,
+    AggregationKind.ZSCORE_LAST,
 )
 
+#: Derived signals get fewer aggregations: the min and max of a ratio are
+#: dominated by the noisiest single sample and carry little beyond the mean and
+#: the spread. The slope is kept because a rising specific consumption is the
+#: wear signature itself.
 _DERIVED_AGGREGATIONS: tuple[AggregationKind, ...] = (
     AggregationKind.MEAN,
     AggregationKind.STDDEV,
+    AggregationKind.SLOPE,
 )
 
 
@@ -134,19 +207,23 @@ def _build_specs() -> tuple[FeatureSpec, ...]:
     return tuple(specs)
 
 
-#: Canonical, ordered feature specification: 5 sensors x 6 aggregations,
-#: plus 2 derived signals x 2 aggregations, plus 2 data-quality features.
+#: Canonical, ordered specification: 5 sensors x 8 aggregations, plus 2 derived
+#: signals x 3 aggregations.
 FEATURE_SPECS: tuple[FeatureSpec, ...] = _build_specs()
 
 #: Data-quality features. ``sample_count`` exposes a degraded collection to the
-#: model, and ``null_ratio`` exposes failing sensors. A gap in the data is itself
+#: model and ``null_ratio`` exposes failing sensors. A gap in the data is itself
 #: information about the machine's health, not merely a nuisance.
-_QUALITY_FEATURE_NAMES: tuple[str, ...] = ("sample_count", "null_ratio")
+QUALITY_FEATURE_NAMES: tuple[str, ...] = ("sample_count", "null_ratio")
 
 #: Canonical feature order. A NumPy matrix has no column names: two permuted
 #: features produce plausible, wrong scores. This order is written into the model
-#: artefact and verified when the scoring job loads it (docs/07 section 2.3).
-FEATURE_NAMES: tuple[str, ...] = tuple(spec.name for spec in FEATURE_SPECS) + _QUALITY_FEATURE_NAMES
+#: artefact and verified when a scoring job loads it (docs/07 section 2.3).
+FEATURE_NAMES: tuple[str, ...] = (
+    tuple(spec.name for spec in FEATURE_SPECS)
+    + tuple(pair.name for pair in CORRELATION_PAIRS)
+    + QUALITY_FEATURE_NAMES
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,14 +279,14 @@ def _stddev_samp(values: Sequence[float]) -> float | None:
 
 
 def _slope_per_second(points: Sequence[tuple[int, float]]) -> float | None:
-    """Drift as ``(last - first) / elapsed_seconds``.
+    """Drift as ``(value at max t - value at min t) / elapsed_seconds``.
 
     A two-point estimate rather than a least-squares fit: it is what a windowed
-    Spark aggregation can express with ``first()`` and ``last()`` without an
-    extra pass, and the conformance test in step 4 depends on both engines
-    computing the same thing. A regression slope would be more robust to noise
-    and is a candidate for a later feature-set version -- with its own version
-    bump, since changing it invalidates every model trained before.
+    aggregation expresses with ``min_by``/``max_by`` in a single pass, and the
+    conformance tests depend on every engine computing the same thing. A
+    regression slope would be more robust to noise and is a candidate for a
+    later feature-set version -- with its own version bump, since changing it
+    invalidates every model trained before.
     """
     if len(points) < 2:
         return None
@@ -219,6 +296,36 @@ def _slope_per_second(points: Sequence[tuple[int, float]]) -> float | None:
     if elapsed_seconds <= 0:
         return None
     return (last_value - first_value) / elapsed_seconds
+
+
+def pearson_correlation(xs: Sequence[float], ys: Sequence[float]) -> float | None:
+    """Pearson correlation, matching Spark's ``corr`` and pandas' ``corr``.
+
+    ``None`` rather than zero when either signal has no variance inside the
+    window: the coefficient is genuinely undefined there, and zero would claim
+    "measured, and uncorrelated". A frozen sensor lands in exactly this case, so
+    the null is the detection signal.
+
+    The ``n - 1`` of the sample covariance cancels against the denominators, so
+    the ddof convention does not matter here -- unlike for the standard
+    deviation.
+    """
+    count = len(xs)
+    if count < 2:
+        return None
+
+    mean_x = _mean(xs)
+    mean_y = _mean(ys)
+    covariance = math.fsum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True))
+    variance_x = math.fsum((x - mean_x) ** 2 for x in xs)
+    variance_y = math.fsum((y - mean_y) ** 2 for y in ys)
+
+    if variance_x <= 0.0 or variance_y <= 0.0:
+        return None
+
+    coefficient = covariance / math.sqrt(variance_x * variance_y)
+    # Floating-point error can push a perfect correlation just outside [-1, 1].
+    return max(-1.0, min(1.0, coefficient))
 
 
 def _aggregate(
@@ -238,6 +345,15 @@ def _aggregate(
         return max(values) - min(values)
     if kind is AggregationKind.SLOPE:
         return _slope_per_second(points)
+    if kind is AggregationKind.DEVIATION_FROM_MEAN:
+        # "Latest" is the value at the greatest event time, i.e. max_by.
+        return points[-1][1] - _mean(values)
+    if kind is AggregationKind.ZSCORE_LAST:
+        dispersion = _stddev_samp(values)
+        if dispersion is None or dispersion <= 0.0:
+            # Undefined, not zero: a flat signal has no scale to measure against.
+            return None
+        return (points[-1][1] - _mean(values)) / dispersion
     raise FeatureComputationError(f"unhandled aggregation: {kind}")  # pragma: no cover
 
 
@@ -246,11 +362,13 @@ def compute_features(samples: Sequence[WindowSample]) -> dict[str, float | None]
 
     Samples are sorted by event time before aggregation, so the result does not
     depend on arrival order. That matters: Kafka guarantees order per partition,
-    but a window can still receive out-of-order samples within the watermark,
-    and slope must not flip sign because of it.
+    but a window can still receive out-of-order samples within the watermark, and
+    a slope must not flip sign because of it. Sorting is what makes this
+    reference agree with an engine using ``min_by``/``max_by``.
 
     Missing readings are excluded per signal rather than dropping the whole
-    sample: one failed sensor must not blind the other four.
+    sample: one failed sensor must not blind the other four. Correlations use
+    pairwise deletion for the same reason.
 
     Args:
         samples: Samples belonging to the window. May be empty.
@@ -264,13 +382,12 @@ def compute_features(samples: Sequence[WindowSample]) -> dict[str, float | None]
     """
     ordered = sorted(samples, key=lambda sample: sample.event_time)
 
-    # Per signal: the values used for aggregation, and (timestamp, value) pairs
-    # used for slope. Built in one pass so both stay consistent.
-    values_by_signal: dict[str, list[float]] = {name: [] for name in SENSOR_NAMES}
-    points_by_signal: dict[str, list[tuple[int, float]]] = {name: [] for name in SENSOR_NAMES}
-    for name in DERIVED_SIGNALS:
-        values_by_signal[name] = []
-        points_by_signal[name] = []
+    all_signals = (*SENSOR_NAMES, *DERIVED_SIGNALS)
+    values_by_signal: dict[str, list[float]] = {name: [] for name in all_signals}
+    points_by_signal: dict[str, list[tuple[int, float]]] = {name: [] for name in all_signals}
+    correlation_values: dict[str, list[tuple[float, float]]] = {
+        pair.name: [] for pair in CORRELATION_PAIRS
+    }
 
     null_slots = 0
     for sample in ordered:
@@ -289,6 +406,12 @@ def compute_features(samples: Sequence[WindowSample]) -> dict[str, float | None]
                 continue
             values_by_signal[signal].append(derived)
             points_by_signal[signal].append((timestamp_ms, derived))
+        for pair in CORRELATION_PAIRS:
+            left = readings[pair.left]
+            right = readings[pair.right]
+            if left is None or right is None:
+                continue
+            correlation_values[pair.name].append((left, right))
 
     features: dict[str, float | None] = {}
     for spec in FEATURE_SPECS:
@@ -296,9 +419,14 @@ def compute_features(samples: Sequence[WindowSample]) -> dict[str, float | None]
             spec.aggregation, values_by_signal[spec.signal], points_by_signal[spec.signal]
         )
 
+    for pair in CORRELATION_PAIRS:
+        paired = correlation_values[pair.name]
+        features[pair.name] = pearson_correlation(
+            [left for left, _ in paired], [right for _, right in paired]
+        )
+
     sample_count = len(ordered)
     features["sample_count"] = float(sample_count)
-    # Share of expected sensor readings that were missing across the window.
     total_slots = sample_count * len(SENSOR_NAMES)
     features["null_ratio"] = (null_slots / total_slots) if total_slots else None
 
