@@ -171,6 +171,52 @@ services:
     networks: [anomaly-net]
     restart: "no"
 
+  stream-processor:
+    build:
+      # The repository root: this component needs libs/telemetry-core and
+      # ml-training, whose classes the model pickle references (decision D-35).
+      context: ..
+      dockerfile: stream-processor/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-anomaly-platform}/stream-processor:dev
+    container_name: anomaly-stream-processor
+    # Behind its own profile, like the simulator: every earlier phase must keep
+    # working without Spark running.
+    #   docker compose --profile stream up -d stream-processor
+    profiles: ["stream"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_INTERNAL_BOOTSTRAP}
+      KAFKA_TOPIC_TELEMETRY_RAW: ${KAFKA_TOPIC_TELEMETRY_RAW}
+      KAFKA_TOPIC_TELEMETRY_SCORED: ${KAFKA_TOPIC_TELEMETRY_SCORED}
+      KAFKA_TOPIC_ALERTS: ${KAFKA_TOPIC_ALERTS}
+      KAFKA_TOPIC_TELEMETRY_DLQ: ${KAFKA_TOPIC_TELEMETRY_DLQ}
+      KAFKA_TOPIC_TELEMETRY_LATE: ${KAFKA_TOPIC_TELEMETRY_LATE}
+      STREAM_MASTER: ${STREAM_MASTER:-local[2]}
+      STREAM_CHECKPOINT_ROOT: /checkpoints
+      STREAM_ARTIFACT_DIR: ${STREAM_ARTIFACT_DIR:-/models/one_class_svm/2.0.0}
+      STREAM_WATERMARK_SECONDS: ${STREAM_WATERMARK_SECONDS:-90}
+      STREAM_WINDOW_SECONDS: ${STREAM_WINDOW_SECONDS:-60}
+      STREAM_SLIDE_SECONDS: ${STREAM_SLIDE_SECONDS:-10}
+      STREAM_TRIGGER_SECONDS: ${STREAM_TRIGGER_SECONDS:-10}
+      STREAM_MAX_OFFSETS_PER_TRIGGER: ${STREAM_MAX_OFFSETS_PER_TRIGGER:-20000}
+      STREAM_STARTING_OFFSETS: ${STREAM_STARTING_OFFSETS:-earliest}
+      STREAM_LATE_DETECTION_ENABLED: ${STREAM_LATE_DETECTION_ENABLED:-true}
+      STREAM_RUN_SECONDS: ${STREAM_RUN_SECONDS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # Checkpoints must survive a container restart, or the recovery guarantee
+      # is void (docs/04 section 3).
+      - spark_checkpoints:/checkpoints
+      # Read-only: an artefact is immutable once published (docs/07 section 6).
+      - ../ml-training/artifacts:/models:ro
+    command: ["python", "-m", "stream_processor.main"]
+    networks: [anomaly-net]
+    restart: "no"
+
 volumes:
   kafka_data:
   postgres_data:

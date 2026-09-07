@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stream-processor"
+version = "0.1.0"
+description = "Spark Structured Streaming job scoring telemetry windows against the trained detector"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = { text = "MIT" }
+
+# An application pins (decision D-16). The scikit-learn, numpy and pandas pins
+# are not a preference: the artefact refuses to load unless scikit-learn matches
+# exactly, and the pickle was written by these versions.
+#
+# PySpark 3.5.3 with Java 17 (decision D-33/D-34). Java 21 breaks Arrow inside
+# Spark 3.5 with "sun.misc.Unsafe or java.nio.DirectByteBuffer not available",
+# which is why the base image is bookworm rather than the current slim tag.
+dependencies = [
+    "telemetry-core==0.1.0",
+    "ml-training==0.1.0",
+    "pyspark==3.5.3",
+    "numpy==2.1.3",
+    "pandas==2.2.3",
+    "pyarrow==18.1.0",
+    "scikit-learn==1.5.2",
+    "joblib==1.4.2",
+    "pydantic==2.10.3",
+    "pydantic-settings==2.6.1",
+    "structlog==24.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "jsonschema>=4.21,<5.0",
+    "mypy>=1.10,<2.0",
+    "ruff>=0.6,<1.0",
+    "pandas-stubs>=2.2,<3.0",
+    "types-jsonschema>=4.21,<5.0",
+]
+
+[project.scripts]
+stream-processor = "stream_processor.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+stream_processor = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "RUF"]
+# N812: "from pyspark.sql import functions as F" is the universal Spark
+# convention; renaming it would make the code unreadable to anyone who
+# knows the library.
+ignore = ["E501", "N812"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N802", "N803", "N806"]
+# DataFrame is the universal name for a Spark frame; renaming it would make the
+# code harder to read for anyone who knows the library.
+"src/stream_processor/*" = ["N803", "N806"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_no_return = true
+show_error_codes = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+# None of these ship type information. No type from them appears in one of our
+# public signatures.
+module = ["pyspark.*", "sklearn.*", "joblib.*", "confluent_kafka.*", "scipy.*"]
+ignore_missing_imports = true
+# PySpark ships inline types but re-exports its public API from private
+# modules, which strict mode rejects. Its documented import paths are the
+# public contract, so the re-exports are treated as explicit.
+implicit_reexport = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[[tool.mypy.overrides]]
+# pandas_udf is an untyped decorator from an untyped library. Refusing it
+# would mean giving up the vectorised scoring path entirely.
+module = "stream_processor.scoring"
+disallow_untyped_decorators = false
