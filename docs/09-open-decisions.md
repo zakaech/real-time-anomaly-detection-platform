@@ -281,3 +281,84 @@ bougent quasiment pas. La sensibilité à ce seuil est rapportée.
 
 Un capteur en panne produit des features nulles ; l'indicateur transforme cette absence en colonne explicite,
 donc en signal exploitable, au lieu que l'imputation l'efface.
+
+### D-33 — Image `python:3.11-slim-bookworm` + OpenJDK 17 · `ACCEPTÉ`
+
+Contrainte mesurée, pas une préférence. Sur une base plus récente (Java 21), PySpark 3.5.3 échoue dès qu'Arrow
+est sollicité — donc à chaque `applyInPandas` et à chaque `pandas_udf`, c'est-à-dire sur tout le chemin de
+scoring : `sun.misc.Unsafe or java.nio.DirectByteBuffer.<init>(long,int) not available`. Spark 3.5 n'ouvre pas
+les modules JDK internes dont Arrow a besoin ; Java 17 les expose encore. Le premier diagnostic — une
+incompatibilité numpy 2 — était faux, et l'a été jusqu'à ce que la même image soit testée avec les deux JVM.
+
+La CI installe explicitement Temurin 17 pour la même raison, sinon elle validerait sur une JVM que l'image
+n'utilise pas.
+
+### D-34 — Spark 3.5.3 · `ACCEPTÉ`
+
+Dernière version compatible Python 3.11 et Java 17 au moment de la Phase 3. Spark 4 impose Java 17+ et modifie
+le connecteur Kafka ; l'intérêt pédagogique est nul et le risque de régression réel.
+
+### D-35 — `ml-training` installé dans l'image du `stream-processor` · `ACCEPTÉ`
+
+**Options** : (A) installer `ml-training` — (B) réimplémenter le chargement du modèle.
+
+**A.** Le pickle référence `CalibratedAnomalyModel` et `PerMachineNormalizer` : sans le module d'origine
+importable, `joblib.load` lève `ModuleNotFoundError`. B signifierait dupliquer la normalisation par machine et
+la calibration ECDF dans un second code — exactement le genre de duplication qui diverge en silence et que le
+triangle de conformité des features existe pour empêcher.
+
+Le coût assumé : l'image du job de streaming dépend du composant d'entraînement. C'est une dépendance de
+sérialisation, pas d'architecture — elle disparaîtrait avec un format d'export neutre (ONNX, PMML), au prix
+d'une conversion à valider.
+
+### D-36 — Watermark 90 s + mode de sortie `update` · `ACCEPTÉ`
+
+Le watermark passe de 30 s (conception Phase 0) à 90 s. Le simulateur met une machine en tampon 20–75 s lors
+d'une coupure réseau et ajoute jusqu'à 9 s de gigue : le pire cas configuré est d'environ 84 s. Un watermark de
+30 s aurait écarté précisément les données générées pour exercer ce mécanisme. **La valeur est propre à
+l'environnement simulé** et doit être recalibrée par la mesure sur des données industrielles réelles.
+
+Le mode `update` a un coût réel — une même fenêtre est publiée plusieurs fois — que la Phase 3 s'était engagée
+à mesurer avant toute optimisation. Le chiffre mesuré est dans `docs/10-phase-3-streaming.md` ; il n'a pas été
+estimé.
+
+Détail complet : `docs/adr/ADR-003-watermark-and-output-mode.md`.
+
+### D-37 — Scorer ou non une fenêtre incomplète · `PROPOSÉ`
+
+**Défaut mesuré en Phase 3, pas supposé.** En mode `update`, une fenêtre est publiée pendant qu'elle se
+remplit, et le seuil d'admission n'exige que 30 échantillons alors que le modèle a été entraîné sur des
+fenêtres complètes de 60. Mesure sur une exécution temps réel de 300 s
+(`docs/10-phase-3-streaming.md` § 5.6) :
+
+| Échantillons à l'émission | Émissions | Jugées anormales |
+|---|---|---|
+| 30 – 39 | 383 | **100,0 %** |
+| 40 – 49 | 351 | 95,4 % |
+| 50 – 59 | 322 | 46,9 % |
+| 60 et plus | 292 | **1,0 %** |
+
+Une fenêtre incomplète est donc classée anormale presque systématiquement — non parce qu'elle est anormale,
+mais parce qu'elle est **hors distribution**. Conséquence observée : 16 alertes `CRITICAL` pour 15 machines en
+cinq minutes. Le backfill ne montrait rien (4 %), parce qu'une fenêtre y passe de vide à complète dans un seul
+lot.
+
+**Options** :
+
+- **(A) Ne scorer qu'une fenêtre complète** — publier les fenêtres partielles avec `is_scored = false` et un
+  motif dédié. Coût : le premier score d'une fenêtre arrive vers `window_end` au lieu de `window_end − 30 s`.
+  Le mode `update` conserve son intérêt pour l'état de fenêtre, mais plus pour la précocité du score.
+- **(B) Relever `MIN_SAMPLES_FOR_SCORING`** vers ~90 % de la taille attendue. Simple, mais la « taille
+  attendue » dépend de la cadence d'échantillonnage, que le job ne connaît pas ; et ce seuil est partagé avec
+  l'entraînement, donc le changer touche la Phase 2.
+- **(C) Entraîner aussi sur des fenêtres partielles**, pour que la distribution d'entraînement couvre ce que
+  la production produit réellement. Le plus correct statistiquement, le plus coûteux : il faut réentraîner et
+  réévaluer, donc rouvrir la Phase 2.
+
+**Recommandation : A.** C'est la seule option qui corrige la cause — scorer une entrée que le modèle n'a jamais
+vue — sans toucher au contrat d'entraînement ni au jeu de features. Elle est aussi la seule dont le coût est
+entièrement mesurable à l'avance : il est borné par la durée de la fenêtre.
+
+**Non corrigé volontairement dans la Phase 3.** Le défaut est chiffré et documenté ; le choix de la règle est
+un arbitrage, pas un détail d'implémentation, et le corriger à la hâte sans nouvelle mesure contredirait la
+règle qui a permis de le trouver.

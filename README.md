@@ -3,10 +3,11 @@
 Plateforme temps réel de détection d'anomalies sur télémétrie de capteurs industriels : ingestion continue,
 enrichissement, scoring par modèle non supervisé, alertes persistées et workflow d'acquittement opérateur.
 
-**État : Phase 2 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
-`telemetry-core`, [`event-simulator`](event-simulator/) qui alimente `telemetry.raw` et `telemetry.labels`, et
-[`ml-training`](ml-training/) qui entraîne, évalue et sérialise le détecteur. Les phases suivantes
-(Spark Structured Streaming, service Spring, dashboard) restent à écrire.
+**État : Phase 3 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
+`telemetry-core`, [`event-simulator`](event-simulator/) qui alimente `telemetry.raw` et `telemetry.labels`,
+[`ml-training`](ml-training/) qui entraîne, évalue et sérialise le détecteur, et
+[`stream-processor`](stream-processor/) qui score le flux en continu et publie `telemetry.scored` et
+`alerts`. Les phases suivantes (service Spring Boot, dashboard Angular) restent à écrire.
 
 ## Pile technique
 
@@ -86,6 +87,29 @@ docker run --rm -v "$PWD":/workspace -w /workspace/ml-training ml-training   pyt
 Les résultats mesurés sont dans [`ml-training/reports/model-report.md`](ml-training/reports/model-report.md),
 généré depuis `results.json` par une exécution réelle — aucun chiffre n'y est saisi à la main.
 
+## Scorer le flux en continu
+
+```sh
+docker build -f stream-processor/Dockerfile -t stream-processor .
+
+# le job (trois requêtes : validation, scoring, alerting)
+docker compose --env-file .env -f infra/docker-compose.yml --profile stream up -d stream-processor
+
+# relire ce que les topics de sortie contiennent réellement
+docker compose --env-file .env -f infra/docker-compose.yml --profile stream run --rm   stream-processor python -m stream_processor.tools.inspect_stream
+```
+
+`STREAM_LATE_DETECTION_ENABLED=false` pour un backfill : pendant un rejeu accéléré, chaque échantillon porte
+par construction un retard de publication important, et tout l'historique partirait dans `telemetry.late`.
+
+Les mesures d'exécution réelle sont dans [`docs/10-phase-3-streaming.md`](docs/10-phase-3-streaming.md), avec
+leurs conditions. Ce sont des mesures **locales**, pas un benchmark.
+
+Un défaut mesuré reste **ouvert** : en mode `update`, une fenêtre encore en cours de remplissage est scorée
+alors que le modèle a été entraîné sur des fenêtres complètes, ce qui la fait classer anormale dans près de
+100 % des cas contre 1,0 % pour une fenêtre complète. Options et coût en latence dans **D-37**
+([`docs/09`](docs/09-open-decisions.md)). Il est documenté et chiffré plutôt que corrigé sans nouvelle mesure.
+
 Vérifier la bibliothèque partagée (lint, format, typage strict, tests) :
 
 ```sh
@@ -110,12 +134,22 @@ Un `Makefile` regroupe ces commandes (`make up`, `make check`, `make clean`…) 
 | [07 — Méthodologie ML](docs/07-ml-methodology.md) | évaluation sans étiquettes, calibration du seuil, dérive |
 | [08 — Dépôt et patterns](docs/08-repository-and-patterns.md) | structure du monorepo, patterns nommés et justifiés |
 | [09 — Décisions ouvertes](docs/09-open-decisions.md) | arbitrages, avec options et recommandations |
+| [10 — Pipeline Spark](docs/10-phase-3-streaming.md) | implémentation, résultats mesurés, incidents rencontrés |
+
+Les décisions structurantes de la Phase 3 ont leur propre ADR :
+
+| ADR | Sujet |
+|---|---|
+| [ADR-001](docs/adr/ADR-001-model-artifact-distribution.md) | distribution et vérification bloquante de l'artefact |
+| [ADR-002](docs/adr/ADR-002-dead-letter-envelope.md) | contrat de l'enveloppe de rebut, et ce qui n'y va pas |
+| [ADR-003](docs/adr/ADR-003-watermark-and-output-mode.md) | watermark 90 s et mode de sortie `update` |
 
 Les contrats de messages font foi dans [`contracts/json-schema/`](contracts/json-schema/), et
 [`contracts/examples/`](contracts/examples/) contient les messages d'exemple rejoués par les tests.
 
 Chaque composant a son propre README : [`libs/telemetry-core/`](libs/telemetry-core/README.md),
-[`event-simulator/`](event-simulator/README.md), [`ml-training/`](ml-training/README.md).
+[`event-simulator/`](event-simulator/README.md), [`ml-training/`](ml-training/README.md),
+[`stream-processor/`](stream-processor/README.md).
 
 ## Sur les chiffres
 
