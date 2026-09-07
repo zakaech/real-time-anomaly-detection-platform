@@ -55,6 +55,12 @@ def _settings_config(prefix: str) -> SettingsConfigDict:
         env_prefix=prefix,
         extra="ignore",
         frozen=True,
+        # An empty variable means "unset", not "invalid". Compose expands an
+        # undefined variable to an empty string -- `FOO: ${FOO:-}` yields
+        # FOO="" -- so without this an optional field like a seed or a run
+        # duration fails validation and the container refuses to start, on
+        # exactly the command the README documents.
+        env_ignore_empty=True,
     )
 
 
