@@ -149,10 +149,12 @@ machines:
 
 anomalies:
   enabled: true
-  # Poisson rate per machine. With 15 machines this is roughly one episode every
-  # few minutes across the fleet -- frequent enough to build an evaluation set
-  # quickly in replay mode, rare enough that normal behaviour dominates.
-  episodes_per_hour: 1.5
+  # Poisson rate per machine (decision D-28). Deliberately low: precision
+  # depends directly on how common anomalies are, so an inflated rate would
+  # produce flattering precision figures that do not transfer to a plant. At
+  # 0.4 per machine per hour a 48-hour replay still yields a few hundred
+  # episodes, which is enough to measure episode recall with useful confidence.
+  episodes_per_hour: 0.4
   min_gap_seconds: 120
   # Anomalies stay inside the physically valid ranges of the contract. A
   # temperature of 812 C is a broken sensor, not a machine anomaly, and a model
