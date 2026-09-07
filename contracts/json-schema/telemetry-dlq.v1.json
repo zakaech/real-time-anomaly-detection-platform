@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zakaria/real-time-anomaly-detection-platform/contracts/telemetry-dlq.v1.json",
+  "title": "DlqEnvelope",
+  "description": "Un message rejete parce que ses DONNEES sont invalides. Topic: telemetry.dlq. Une panne transitoire d'infrastructure ne doit jamais arriver ici: elle releve du retry et du checkpoint. Confondre les deux revient a jeter des messages parfaitement valides pendant une panne de broker.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dlq_reason",
+    "dlq_detail",
+    "source_topic",
+    "source_partition",
+    "source_offset",
+    "failed_at",
+    "processor_version",
+    "raw_payload"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+    "dlq_reason": {
+      "type": "string",
+      "enum": [
+        "MALFORMED_JSON",
+        "SCHEMA_VALIDATION_FAILED",
+        "UNSUPPORTED_SCHEMA_VERSION",
+        "UNKNOWN_MACHINE"
+      ],
+      "description": "Categorie de rejet. Toutes sont des erreurs de donnees, jamais d'infrastructure."
+    },
+    "dlq_detail": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Cause actionnable, avec le chemin du champ fautif. 'quelque chose etait invalide' n'est pas un message de DLQ exploitable."
+    },
+    "source_topic": { "type": "string", "minLength": 1 },
+    "source_partition": { "type": "integer", "minimum": 0 },
+    "source_offset": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Avec le topic et la partition, localise le message exact pour le rejeu."
+    },
+    "failed_at": { "type": "string", "format": "date-time" },
+    "processor_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version du composant qui a rejete. Permet de savoir si un correctif a deja ete deploye."
+    },
+    "raw_payload": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "Charge utile ORIGINALE, non modifiee, en base64. C'est ce qui rend le rejeu possible apres correction; une DLQ qui ne contient qu'un message d'erreur est un journal, pas une file de rebut."
+    },
+    "raw_key": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Cle Kafka originale en base64, quand elle existe."
+    }
+  }
+}
