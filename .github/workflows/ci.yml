@@ -160,6 +160,77 @@ jobs:
         working-directory: ml-training
         run: pytest -q tests/test_feature_conformance.py tests/test_leakage.py
 
+  stream-processor:
+    name: stream-processor (lint, types, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 17, not the runner's default. PySpark 3.5 fails on Java 21 with
+      # "sun.misc.Unsafe or java.nio.DirectByteBuffer.<init>(long,int) not
+      # available" as soon as Arrow is used -- which the scoring path always is
+      # (decision D-33). Pinning it here keeps CI on the same JVM as the image.
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            libs/telemetry-core/pyproject.toml
+            ml-training/pyproject.toml
+            stream-processor/pyproject.toml
+
+      - name: Install telemetry-core
+        run: pip install -e libs/telemetry-core
+
+      # ml-training is a runtime dependency, not a test convenience: the pickle
+      # holds references to its classes and will not unpickle without it
+      # (decision D-35).
+      - name: Install ml-training
+        run: pip install -e ml-training
+
+      - name: Install stream-processor with dev extras
+        run: pip install -e "stream-processor[dev]"
+
+      - name: Lint (ruff)
+        if: ${{ !cancelled() }}
+        run: ruff check stream-processor
+
+      - name: Format check (ruff)
+        if: ${{ !cancelled() }}
+        run: ruff format --check stream-processor
+
+      - name: Type check (mypy, strict)
+        if: ${{ !cancelled() }}
+        working-directory: stream-processor
+        run: mypy
+
+      - name: Tests
+        if: ${{ !cancelled() }}
+        working-directory: stream-processor
+        run: pytest -q
+
+      # Named separately because each guards an invariant that fails silently:
+      #   - feature conformance: Spark must compute what the model was trained
+      #     on, or scoring is plausible and wrong;
+      #   - artefact verification: the job must refuse an incompatible pickle
+      #     rather than score with it;
+      #   - alerting: the deduplication rules that stop one incident becoming
+      #     hundreds of alerts, including the timeout-behind-watermark case that
+      #     killed a real recovery run.
+      # The trained binary is a build output and is not committed, so the tests
+      # that need it skip here and run locally; the verification rejections are
+      # written to run without it.
+      - name: Feature conformance, artefact verification and alert deduplication
+        if: ${{ !cancelled() }}
+        working-directory: stream-processor
+        run: pytest -q tests/test_feature_conformance.py tests/test_model.py tests/test_alerting.py
+
   contracts:
     name: contracts (JSON Schema validity)
     runs-on: ubuntu-latest
