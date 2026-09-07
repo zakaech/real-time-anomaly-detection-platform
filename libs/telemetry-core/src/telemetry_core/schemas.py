@@ -465,7 +465,20 @@ class ScoredEvent:
 
     @property
     def processing_delay_ms(self) -> int:
-        """End-to-end latency: how long after the window closed it was scored."""
+        """When this window was published, relative to the instant it closes.
+
+        **Negative while the window is still open**, and that is the normal case,
+        not an anomaly. In update mode a window is republished at every trigger
+        that changes it, so its early emissions are published before
+        ``window_end`` is reached -- measured at a median of about -18 s on a
+        live run (docs/10 section 5.4), which is precisely the latency that mode
+        buys over ``append``.
+
+        So this is not end-to-end pipeline lag, and reading it as such would be
+        wrong in both directions: a negative value is not time travel, and a
+        large positive one during a backfill measures the age of the replayed
+        history rather than any delay of ours.
+        """
         return to_epoch_millis(self.scored_at) - to_epoch_millis(self.window_end)
 
     def to_dict(self) -> dict[str, Any]:

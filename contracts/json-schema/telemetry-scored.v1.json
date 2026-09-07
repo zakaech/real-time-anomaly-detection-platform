@@ -125,7 +125,7 @@
     },
     "processing_delay_ms": {
       "type": "integer",
-      "description": "scored_at moins window_end en millisecondes. Latence de bout en bout observee."
+      "description": "scored_at moins window_end en millisecondes. Negatif tant que la fenetre est encore ouverte: en mode update une fenetre est republiee a chaque declenchement qui la modifie, donc avant window_end. Ce n'est donc pas une latence de bout en bout."
     }
   },
   "allOf": [
