@@ -226,3 +226,58 @@ projet et l'image amont est cohérente. Conséquence pratique confirmée à l'us
 Il dupliquait `sample_count` dans `ScoredEvent`. Une redondance dans un contrat finit toujours par diverger :
 deux champs censés dire la même chose, deux producteurs, et un jour deux valeurs différentes sans moyen de
 savoir laquelle fait foi. Retiré avant tout usage, donc sans coût de migration.
+
+---
+
+## Décisions de la Phase 2
+
+### D-25 — Extension du jeu de features en v2.0.0 · `ACCEPTÉ`
+
+52 features au lieu de 36. Les deux familles manquantes du cahier des charges — écart à la moyenne mobile et
+corrélations inter-capteurs — l'imposaient. `FEATURE_SET_VERSION` passe en `2.0.0` et l'artefact refuse de se
+charger si la version ne correspond pas : un modèle entraîné sur la v1 scorerait des colonnes qui ne veulent
+plus dire la même chose, sans que rien n'échoue bruyamment.
+
+### D-26 — `min_by`/`max_by` plutôt que `first`/`last` · `ACCEPTÉ`
+
+Défaut trouvé dans la spécification de la Phase 1. `slope_per_second` était définie via « premier » et
+« dernier », dont la traduction Spark naturelle utilise `first()`/`last()` — **explicitement non
+déterministes** : leur résultat dépend de l'ordre des lignes, non garanti après un shuffle. Le test de
+conformance de la Phase 3 aurait échoué par intermittence.
+
+La sémantique est redéfinie en `min_by(valeur, event_time)` et `max_by(valeur, event_time)`, déterministes tant
+que `(machine_id, event_time)` est unique.
+
+### D-27 — Entraînement sur données contaminées · `ACCEPTÉ`
+
+Corrige une consigne écrite en Phase 0. Filtrer l'entraînement par les labels est une fuite : la production ne
+sait pas ce qui est propre. La variante filtrée est mesurée en secondaire pour chiffrer l'écart.
+
+### D-28 — Prévalence abaissée à 0,4 épisode/heure · `ACCEPTÉ`
+
+La précision dépend directement de la prévalence. À 1,5 épisode/heure la précision affichée aurait été
+flatteuse et non transposable. Le rapport indique la prévalence réellement mesurée à côté de chaque chiffre de
+précision.
+
+### D-29 — Normalisation par machine dans le Pipeline · `ACCEPTÉ`
+
+`PerMachineNormalizer` est le premier étage du Pipeline sérialisé, ce qui impose que l'entrée porte
+`machine_id`. C'est le prix à payer pour que la Phase 3 n'ait aucune logique ML à réimplémenter.
+
+### D-30 — Elliptic Envelope en quatrième modèle exploratoire · `ACCEPTÉ`
+
+Distingué des trois obligatoires dans le rapport. Il est le seul candidat à ne pas pouvoir prendre le jeu de
+features complet, pour une raison mesurée en Phase 2 : `range = max − min` rend la covariance de rang
+déficient, et scikit-learn **ne refuse pas** — il avertit et continue avec un conditionnement de l'ordre de
+10¹⁶, au bord de la précision float64. C'est pire qu'un échec, puisque le modèle se charge et score comme si de
+rien n'était. Les colonnes `*_range` sont donc exclues délibérément.
+
+### D-31 — Fenêtre anormale si `anomaly_fraction >= 0.25` · `ACCEPTÉ`
+
+« Tout recouvrement » qualifierait d'anormale une fenêtre de 60 s contenant un pic de 2 s, dont les agrégats ne
+bougent quasiment pas. La sensibilité à ce seuil est rapportée.
+
+### D-32 — Imputation médiane avec indicateurs de manquant · `ACCEPTÉ`
+
+Un capteur en panne produit des features nulles ; l'indicateur transforme cette absence en colonne explicite,
+donc en signal exploitable, au lieu que l'imputation l'efface.

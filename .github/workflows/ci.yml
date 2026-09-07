@@ -114,6 +114,52 @@ jobs:
         working-directory: event-simulator
         run: pytest -q tests/test_rng.py tests/test_projections.py
 
+  ml-training:
+    name: ml-training (lint, types, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            libs/telemetry-core/pyproject.toml
+            ml-training/pyproject.toml
+
+      - name: Install telemetry-core
+        run: pip install -e libs/telemetry-core
+
+      - name: Install ml-training with dev extras
+        run: pip install -e "ml-training[dev]"
+
+      - name: Lint (ruff)
+        if: ${{ !cancelled() }}
+        run: ruff check ml-training
+
+      - name: Format check (ruff)
+        if: ${{ !cancelled() }}
+        run: ruff format --check ml-training
+
+      - name: Type check (mypy, strict)
+        if: ${{ !cancelled() }}
+        working-directory: ml-training
+        run: mypy
+
+      - name: Tests
+        if: ${{ !cancelled() }}
+        working-directory: ml-training
+        run: pytest -q
+
+      # Named separately: the feature conformance test is what lets the Spark
+      # job in Phase 3 claim the same semantics, and the leakage tests guard the
+      # failure that produces excellent metrics and a worthless model.
+      - name: Feature conformance and label leakage
+        if: ${{ !cancelled() }}
+        working-directory: ml-training
+        run: pytest -q tests/test_feature_conformance.py tests/test_leakage.py
+
   contracts:
     name: contracts (JSON Schema validity)
     runs-on: ubuntu-latest

@@ -3,9 +3,10 @@
 Plateforme temps réel de détection d'anomalies sur télémétrie de capteurs industriels : ingestion continue,
 enrichissement, scoring par modèle non supervisé, alertes persistées et workflow d'acquittement opérateur.
 
-**État : Phase 1 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
-`telemetry-core`, et [`event-simulator`](event-simulator/) qui alimente `telemetry.raw` et `telemetry.labels`.
-Les phases suivantes (entraînement ML, Spark Structured Streaming, service Spring, dashboard) restent à écrire.
+**État : Phase 2 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
+`telemetry-core`, [`event-simulator`](event-simulator/) qui alimente `telemetry.raw` et `telemetry.labels`, et
+[`ml-training`](ml-training/) qui entraîne, évalue et sérialise le détecteur. Les phases suivantes
+(Spark Structured Streaming, service Spring, dashboard) restent à écrire.
 
 ## Pile technique
 
@@ -70,6 +71,21 @@ docker run --rm --network anomaly-platform_anomaly-net \
   event-simulator python -m event_simulator.tools.inspect --topic telemetry.labels
 ```
 
+## Entraîner le détecteur
+
+```sh
+docker build -f ml-training/Dockerfile -t ml-training .
+
+# instantané borné de Kafka, identifié par son empreinte
+docker run --rm --network anomaly-platform_anomaly-net   -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092   -v "$PWD/data":/workspace/data ml-training   python -m ml_training.cli export --destination ../data/run-01 --source-seed 424242
+
+# entraînement, évaluation, artefact et rapport
+docker run --rm -v "$PWD":/workspace -w /workspace/ml-training ml-training   python -m ml_training.cli train --dataset ../data/run-01
+```
+
+Les résultats mesurés sont dans [`ml-training/reports/model-report.md`](ml-training/reports/model-report.md),
+généré depuis `results.json` par une exécution réelle — aucun chiffre n'y est saisi à la main.
+
 Vérifier la bibliothèque partagée (lint, format, typage strict, tests) :
 
 ```sh
@@ -99,7 +115,7 @@ Les contrats de messages font foi dans [`contracts/json-schema/`](contracts/json
 [`contracts/examples/`](contracts/examples/) contient les messages d'exemple rejoués par les tests.
 
 Chaque composant a son propre README : [`libs/telemetry-core/`](libs/telemetry-core/README.md),
-[`event-simulator/`](event-simulator/README.md).
+[`event-simulator/`](event-simulator/README.md), [`ml-training/`](ml-training/README.md).
 
 ## Sur les chiffres
 
