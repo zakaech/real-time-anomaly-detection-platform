@@ -25,6 +25,12 @@ class TrainingSettings(BaseSettings):
         env_prefix="TRAINING_",
         extra="ignore",
         frozen=True,
+        # An empty variable means "unset", not "invalid". Compose expands an
+        # undefined variable to an empty string -- `FOO: ${FOO:-}` yields
+        # FOO="" -- so without this an optional field like a seed or a run
+        # duration fails validation and the container refuses to start, on
+        # exactly the command the README documents.
+        env_ignore_empty=True,
     )
 
     seed: int = Field(default=20260907, ge=0)

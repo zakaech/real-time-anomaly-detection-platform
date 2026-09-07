@@ -146,3 +146,32 @@ class TestLoggingSettings:
     def test_level_is_overridable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LOG_LEVEL", "DEBUG")
         assert load_settings(LoggingSettings).log_level == "DEBUG"
+
+
+class TestEmptyVariablesMeanUnset:
+    """Docker Compose expands an undefined variable to an empty string.
+
+    ``FOO: ${FOO:-}`` in a compose file yields ``FOO=""`` in the container, not
+    an absent variable. Treating that as a value makes every optional setting a
+    startup failure -- which is exactly what happened: the committed
+    ``.env.example`` leaves the optional variables blank, so the documented
+    ``docker compose up`` command could not start the service at all.
+    """
+
+    def test_an_empty_optional_falls_back_to_its_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+        monkeypatch.setenv("KAFKA_CLIENT_ID", "")
+
+        settings = load_settings(KafkaSettings)
+
+        assert settings.client_id == KafkaSettings.model_fields["client_id"].default
+
+    def test_an_empty_required_still_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The rule must not turn a blank broker address into a silent default."""
+        monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "")
+
+        with pytest.raises(ConfigurationError) as info:
+            load_settings(KafkaSettings)
+        assert "KAFKA_BOOTSTRAP_SERVERS" in str(info.value)
