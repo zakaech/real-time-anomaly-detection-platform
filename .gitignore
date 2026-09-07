@@ -45,3 +45,9 @@ models/**/*.joblib
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Training artefacts: the model binary is a build output, reproducible from its
+# seed and its dataset digest. The metadata beside it is small and describes the
+# run, so it stays in the repository.
+ml-training/artifacts/**/*.joblib
+data/

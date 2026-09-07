@@ -1,8 +1,9 @@
 # 07 — Méthodologie ML : évaluation sans étiquettes, calibration, dérive
 
 > Aucun chiffre de performance de ce document n'est un résultat. Les valeurs citées sont des **paramètres de
-> conception** ou des **seuils de la littérature**. Les résultats réels seront produits par
-> `ml-training/evaluate.py` et écrits dans `docs/benchmarks/`.
+> conception** ou des **seuils de la littérature**. Les résultats réellement mesurés sont dans
+> [`ml-training/reports/model-report.md`](../ml-training/reports/model-report.md), généré depuis
+> `reports/results.json` par une exécution réelle.
 
 ## 1. Le problème posé honnêtement
 
@@ -40,11 +41,11 @@ Quatre garde-fous :
 | Candidat | Retenu | Raison |
 |---|---|---|
 | **Isolation Forest** | **oui, modèle principal** | inférence `O(log n)` par arbre, sans données d'entraînement embarquées, sans hypothèse de distribution ; c'est ce qui le rend viable en streaming |
-| Enveloppe robuste (Mahalanobis) | oui, **baseline** | rapide, interprétable, capte les corrélations linéaires ; référence à battre |
+| Enveloppe robuste (Mahalanobis) | oui, **exploratoire** | rapide, capte les corrélations linéaires. Seul candidat à ne pas supporter le jeu complet : `range = max − min` rend la covariance de rang déficient (D-30) |
 | Règle 3-sigma par capteur | oui, **baseline triviale** | plancher de comparaison obligatoire |
-| One-Class SVM | non | entraînement en `O(n²)` à `O(n³)`, inférence dépendante des vecteurs support ; ne passe pas l'échelle |
+| One-Class SVM | **oui, comparé en Phase 2** | frontière non linéaire, mais entraînement en `O(n²)` à `O(n³)` et inférence proportionnelle au nombre de vecteurs support. Le coût est **mesuré** à plusieurs tailles plutôt qu'affirmé |
 | LOF | non | exige le voisinage au moment de l'inférence → transporter le jeu d'entraînement dans chaque exécuteur |
-| Autoencodeur | non | hors stack imposée, et injustifiable sur 30 features tabulaires |
+| Autoencodeur | non | hors stack imposée, et injustifiable sur 52 features tabulaires |
 
 Isolation Forest isole les points anormaux par partitionnement aléatoire : un point atypique demande moins de
 coupes pour être isolé. Ce qui compte ici : **le modèle sérialisé est un ensemble d'arbres, quelques centaines
@@ -54,16 +55,29 @@ de kilo-octets, sans données**. Il se diffuse à chaque exécuteur Spark sans c
 score, la politique produit une décision. Mélanger les deux rend impossible de changer de seuil sans
 réentraîner.
 
-### 2.2 Features (~30, par machine et par fenêtre de 60 s)
+### 2.2 Features (52, par machine et par fenêtre de 60 s)
 
-| Famille | Exemples | Ce que cela capte |
+Jeu de features **v2.0.0**, 52 features, défini une seule fois dans `telemetry_core.features` :
+
+| Famille | Détail | Nombre |
 |---|---|---|
-| Position | `*_mean`, `*_median` | niveau moyen |
-| Dispersion | `*_std`, `*_iqr`, `*_range` | instabilité, à niveau moyen normal |
-| Tendance | `(last − first) / 60` | dérive progressive |
-| Extrêmes | `*_min`, `*_max` | pic transitoire noyé dans la moyenne |
-| **Ratios physiques** | `power_kw / rotation_rpm`, `vibration / rotation_rpm` | **signature de frottement mécanique** |
-| Qualité | `sample_count`, `null_ratio` | dégradation de la collecte |
+| Position | `*_mean` | 5 |
+| Dispersion | `*_stddev`, `*_min`, `*_max`, `*_range` | 20 |
+| Tendance | `*_slope_per_second` | 5 |
+| **Écart à la moyenne mobile** | `*_deviation_from_mean`, `*_zscore_last` | 10 |
+| **Ratios physiques** | `power_per_rpm`, `vibration_per_rpm` × mean, stddev, slope | 6 |
+| **Corrélations inter-capteurs** | 4 paires physiquement motivées | 4 |
+| Qualité | `sample_count`, `null_ratio` | 2 |
+
+Deux sémantiques sont figées parce que les moteurs divergent dessus en silence :
+
+- l'écart-type est en **ddof=1** (`stddev_samp` de Spark), alors que `numpy.std` fait ddof=0 ;
+- « premier » et « dernier » signifient **`min_by`/`max_by` sur `event_time`**, jamais `first()`/`last()` de
+  Spark, qui sont explicitement non déterministes après un shuffle. Un test de conformance bâti dessus
+  échouerait par intermittence, ce qui est le pire mode de panne disponible.
+
+Les corrélations utilisent la **suppression par paire** et valent `None` — jamais zéro — lorsqu'un signal n'a
+aucune variance dans la fenêtre. Un capteur figé tombe exactement dans ce cas, et ce `None` est le signal.
 
 Les ratios sont le cœur du dispositif. Une hausse de puissance **à régime constant** signe un frottement accru,
 alors que puissance et régime pris séparément peuvent chacun rester dans leurs plages nominales. C'est ce type
@@ -179,9 +193,15 @@ validation sur le jour 6, test sur le jour 7. Un découpage aléatoire placerait
 secondes d'intervalle de part et d'autre de la séparation — une fuite qui gonfle artificiellement les
 résultats.
 
-**Entraînement sur données propres** : le jeu d'entraînement exclut les épisodes étiquetés. Isolation Forest
-tolère une contamination faible, mais entraîner sur des anomalies revient à lui apprendre qu'elles sont
-normales.
+**Entraînement sur données contaminées — correction de la Phase 2 (D-27).** Cette section indiquait
+initialement que le jeu d'entraînement devait exclure les épisodes étiquetés. C'était une erreur : filtrer par
+les labels utilise une information dont la production ne dispose pas, puisque personne n'y sait quelles fenêtres
+sont propres. Toute métrique obtenue ainsi est optimiste d'une quantité non mesurable.
+
+Le protocole principal entraîne donc sur les fenêtres **non filtrées**, exactement comme le ferait un
+déploiement réel. Isolation Forest et One-Class SVM tolèrent une contamination modérée. La variante filtrée est
+mesurée en expérience secondaire, uniquement pour chiffrer l'écart plutôt que de le laisser à l'état
+d'affirmation.
 
 ### 4.2 En production, sans étiquettes
 
