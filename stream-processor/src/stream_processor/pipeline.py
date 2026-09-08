@@ -153,7 +153,7 @@ def build_scoring_stream(
     )
     features = derive_features(aggregated).withColumn(FEATURE_ARRAY_COLUMN, features_array())
 
-    encoder = make_scored_encoder(spec)
+    encoder = make_scored_encoder(spec, maturity_tolerance_steps=settings.maturity_tolerance_steps)
     return features.select(
         F.col("machine_id").alias("key"),
         encoder(
@@ -164,6 +164,8 @@ def build_scoring_stream(
             F.col("sample_count"),
             F.col("running_ratio"),
             F.col("machine_state"),
+            F.col("event_time_first"),
+            F.col("event_time_last"),
             F.col(FEATURE_ARRAY_COLUMN),
         ).alias("value"),
         F.lit(topics.telemetry_scored).alias("topic"),

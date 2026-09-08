@@ -78,6 +78,19 @@ class StreamSettings(BaseSettings):
     #: into one by the grouping rule.
     alert_gap_seconds: int = Field(default=120, gt=0)
 
+    # --- window maturity (decision D-37 / ADR-004) --------------------------
+    #: How many of the machine's own sampling intervals may be missing from the
+    #: end of a window before it stops counting as complete.
+    #:
+    #: This is **not** the watermark and does not replace it. The watermark is a
+    #: stream-wide lateness bound used to evict state; maturity is a per-window
+    #: property computed from that window's own event-time coverage. Raising
+    #: this admits windows whose tail is missing, which is exactly the defect
+    #: D-37 records: the model was trained on complete windows, and a partial
+    #: one was measured being flagged anomalous ~100 % of the time against 1.0 %
+    #: for a complete one.
+    maturity_tolerance_steps: float = Field(default=2.0, gt=0)
+
     # --- paths --------------------------------------------------------------
     checkpoint_root: Path = Field(default=Path("/checkpoints"))
     artifact_dir: Path = Field(default=Path("/models/one_class_svm/2.0.0"))

@@ -52,6 +52,7 @@
         "INSUFFICIENT_SAMPLES",
         "MISSING_SENSOR_DATA",
         "MODEL_UNAVAILABLE",
+        "WINDOW_NOT_MATURE",
         null
       ],
       "default": null,

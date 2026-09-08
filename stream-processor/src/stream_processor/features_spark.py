@@ -115,6 +115,12 @@ def window_aggregations() -> list[Column]:
             F.count(F.lit(1)).alias("__sample_count"),
             F.sum("__null_count").alias("__null_total"),
             F.avg("__running").alias("running_ratio"),
+            # Event-time coverage of the window, for the maturity rule (D-37).
+            # Internal like __sample_count: these are NOT features, they never
+            # reach the model, and adding them changes no column the artefact
+            # was trained on.
+            F.min("event_time").alias("__event_time_first"),
+            F.max("event_time").alias("__event_time_last"),
             # Deterministic "last state" and "the line this machine belongs to".
             F.max_by("machine_state", F.col("event_time")).alias("machine_state"),
             F.max_by("line_id", F.col("event_time")).alias("line_id"),
@@ -174,6 +180,12 @@ def derive_features(aggregated: DataFrame) -> DataFrame:
         F.col("running_ratio"),
         F.col("machine_state"),
         F.col("line_id"),
+        # Event-time coverage, carried through to the scoring UDF which decides
+        # maturity in plain Python (D-37). Metadata, not features -- they never
+        # reach the model, and they sit here rather than after the feature block
+        # because the 52 features must remain the trailing columns.
+        F.col("__event_time_first").alias("event_time_first"),
+        F.col("__event_time_last").alias("event_time_last"),
     ]
 
     for spec in FEATURE_SPECS:
