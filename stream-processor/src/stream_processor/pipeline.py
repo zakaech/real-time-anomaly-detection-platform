@@ -212,6 +212,12 @@ def build_alerting_query(
             F.col("score_threshold"),
             F.col("model.name").alias("model_name"),
             F.col("model.version").alias("model_version"),
+            # Carried through to the alert, not dropped here. artifact_sha256 is
+            # the proof that the model which scored this window is the binary
+            # that was evaluated in Phase 2; an alert without it cannot be tied
+            # back to a specific artefact months later.
+            F.col("model.trained_at").alias("model_trained_at"),
+            F.col("model.artifact_sha256").alias("model_artifact_sha256"),
             F.col("top_contributors"),
         )
         # The timeout is on event time, so the watermark has to advance with the

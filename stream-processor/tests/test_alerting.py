@@ -286,3 +286,63 @@ class TestProgressSummary:
 
         assert summary["batch_duration_ms"] is None
         assert summary["state_rows"] == 0
+
+
+class TestModelProvenance:
+    """The alert must carry which artefact produced it.
+
+    telemetry.scored has always carried model.trained_at and
+    model.artifact_sha256 -- the Spark schema declares both -- but the alerting
+    projection selected only name and version, so every published alert had them
+    null. artifact_sha256 is the proof that the model which scored a window is
+    the binary evaluated in Phase 2; without it an alert cannot be tied back to
+    an artefact months later, which is the whole reason the field exists.
+    """
+
+    @staticmethod
+    def _with_provenance(offset: int, trained_at: Any, sha: Any) -> dict[str, Any]:
+        # The alert is built from the window that TRIPS the hysteresis -- the
+        # second consecutive one -- so that is the row whose provenance is read.
+        row = _row(offset)
+        row["model_trained_at"] = trained_at
+        row["model_artifact_sha256"] = sha
+        return row
+
+    def test_the_artefact_identity_reaches_the_alert(self) -> None:
+        opening = self._with_provenance(10, "2026-09-07T00:36:44.723Z", "0" * 64)
+
+        emitted, _state = _run([[_row(0)], [opening]])
+
+        alert = json.loads(emitted[0]["payload"])
+        assert alert["model"]["artifact_sha256"] == "0" * 64
+        assert alert["model"]["trained_at"] == "2026-09-07T00:36:44.723Z"
+
+    def test_an_absent_provenance_stays_null(self) -> None:
+        """The fields are optional in the contract, so their absence is not an
+        error -- it must not become the string "None" either."""
+        emitted, _state = _run([[_row(0)], [_row(10)]])
+
+        alert = json.loads(emitted[0]["payload"])
+        assert alert["model"]["trained_at"] is None
+        assert alert["model"]["artifact_sha256"] is None
+
+    def test_a_nan_from_arrow_is_not_read_as_text(self) -> None:
+        """Arrow renders a missing column as NaN, and str(nan) is "nan" -- which
+        would pass silently into the contract and fail its 64-hex check there
+        instead of here."""
+        opening = self._with_provenance(10, float("nan"), float("nan"))
+
+        emitted, _state = _run([[_row(0)], [opening]])
+
+        alert = json.loads(emitted[0]["payload"])
+        assert alert["model"]["artifact_sha256"] is None
+        assert alert["model"]["trained_at"] is None
+
+    def test_a_malformed_timestamp_does_not_cost_the_alert(self) -> None:
+        """Provenance is metadata; the alert is the operational signal."""
+        opening = self._with_provenance(10, "not-a-timestamp", None)
+
+        emitted, _state = _run([[_row(0)], [opening]])
+
+        assert len(emitted) == 1
+        assert json.loads(emitted[0]["payload"])["model"]["trained_at"] is None
