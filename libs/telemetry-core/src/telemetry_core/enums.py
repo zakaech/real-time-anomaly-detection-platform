@@ -142,6 +142,12 @@ class SkipReason(WireEnum):
     INSUFFICIENT_SAMPLES = "INSUFFICIENT_SAMPLES"
     MISSING_SENSOR_DATA = "MISSING_SENSOR_DATA"
     MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
+    #: The window is still filling: its data does not yet reach its own end.
+    #: Distinct from INSUFFICIENT_SAMPLES, which counts rows without asking
+    #: *where* in the window they fall. A window can hold plenty of samples and
+    #: still cover only its first half -- which is what update mode publishes at
+    #: every trigger, and what the model was never trained on (decision D-37).
+    WINDOW_NOT_MATURE = "WINDOW_NOT_MATURE"
 
 
 class LabelSource(WireEnum):

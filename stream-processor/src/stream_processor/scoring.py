@@ -42,14 +42,28 @@ from telemetry_core.timeutil import parse_instant, utc_now
 
 from stream_processor.model import ModelSpec, load_model
 from stream_processor.policy import (
+    DEFAULT_MATURITY_TOLERANCE_STEPS,
     admission_skip_reason,
     build_scored_event,
     to_utc_datetime,
+    window_is_mature,
 )
 
 __all__ = ["FEATURE_ARRAY_COLUMN", "features_array", "make_scored_encoder"]
 
 FEATURE_ARRAY_COLUMN = "__features"
+
+#: Arrow hands timestamps over in whatever resolution it chose -- datetime64[us]
+#: in practice, not the [ns] one might assume -- so dividing a raw integer view
+#: by 1e9 is wrong by a factor of a thousand. Converting through pandas keeps
+#: the arithmetic independent of that choice.
+_EPOCH = pd.Timestamp("1970-01-01", tz="UTC")
+
+
+def _epoch_seconds(values: pd.Series) -> npt.NDArray[np.float64]:
+    """Timestamps as epoch seconds, whatever resolution Arrow used."""
+    stamps = pd.to_datetime(values, utc=True)
+    return np.asarray((stamps - _EPOCH).dt.total_seconds(), dtype="float64")
 
 
 def features_array() -> Column:
@@ -74,12 +88,17 @@ def _model_reference(metadata: dict[str, Any]) -> ModelRef:
     )
 
 
-def make_scored_encoder(spec: ModelSpec) -> Any:
+def make_scored_encoder(
+    spec: ModelSpec,
+    *,
+    maturity_tolerance_steps: float = DEFAULT_MATURITY_TOLERANCE_STEPS,
+) -> Any:
     """Build the UDF that scores a batch of windows and encodes the messages.
 
     ``spec`` is captured by the closure and is deliberately tiny -- a path and a
     flag -- because it is what crosses to the workers. The model itself is
-    loaded there, once per process.
+    loaded there, once per process. ``maturity_tolerance_steps`` is captured the
+    same way: a float, not a settings object.
     """
 
     # The iterator-of-batches form is the one PySpark infers from the
@@ -103,6 +122,8 @@ def make_scored_encoder(spec: ModelSpec) -> Any:
             sample_count,
             running_ratio,
             machine_state,
+            event_time_first,
+            event_time_last,
             feature_arrays,
         ) in batches:
             rows = len(machine_id)
@@ -114,6 +135,26 @@ def make_scored_encoder(spec: ModelSpec) -> Any:
                 [np.asarray(item, dtype="float64") for item in feature_arrays]
             )
 
+            # Maturity is decided per window from its own event-time coverage
+            # (D-37). Epoch seconds rather than timestamps: the rule is
+            # arithmetic on instants, and pandas hands these over in whatever
+            # resolution Arrow chose.
+            start_epoch = _epoch_seconds(window_start)
+            end_epoch = _epoch_seconds(window_end)
+            first_epoch = _epoch_seconds(event_time_first)
+            last_epoch = _epoch_seconds(event_time_last)
+            mature = [
+                window_is_mature(
+                    window_start_epoch=start_epoch[index],
+                    window_end_epoch=end_epoch[index],
+                    first_event_epoch=first_epoch[index],
+                    last_event_epoch=last_epoch[index],
+                    sample_count=int(sample_count.iloc[index]),
+                    tolerance_steps=maturity_tolerance_steps,
+                )
+                for index in range(rows)
+            ]
+
             # Only admitted windows are scored. Scoring the rest would feed the
             # model a distribution it was never trained on, and the result would
             # be a number with no meaning rather than an obvious failure.
@@ -123,6 +164,7 @@ def make_scored_encoder(spec: ModelSpec) -> Any:
                         sample_count=int(sample_count.iloc[index]),
                         running_ratio=float(running_ratio.iloc[index]),
                         machine_state=str(machine_state.iloc[index]),
+                        is_mature=mature[index],
                     )
                     is None
                     for index in range(rows)
@@ -150,6 +192,7 @@ def make_scored_encoder(spec: ModelSpec) -> Any:
                     sample_count=int(sample_count.iloc[index]),
                     running_ratio=float(running_ratio.iloc[index]),
                     machine_state=str(machine_state.iloc[index]),
+                    is_mature=mature[index],
                     features=matrix[index],
                     model_ref=model_ref,
                     raw_score=None if not is_admitted else float(raw_scores[index]),
