@@ -13,7 +13,11 @@ measure the consequence rather than assume it:
   measure it before optimising anything;
 * the **processing delay** -- ``scored_at - window_end``, the contract's own
   latency field, so the reported latency is the one the platform publishes
-  rather than a second definition invented here.
+  rather than a second definition invented here. It is reported twice: over all
+  emissions, where it is negative because update mode publishes a window while
+  it still fills, and over **scored** emissions only, which is the delay before
+  a window is actually judged. Reporting only the first would understate the
+  latency; reporting only the second would hide what update mode buys.
 """
 
 from __future__ import annotations
@@ -82,6 +86,7 @@ def _consume(bootstrap: str, topic: str, limit: int, timeout: float) -> list[byt
 def _report_scored(payloads: list[bytes]) -> dict[str, Any]:
     windows: Counter[tuple[str, str]] = Counter()
     delays: list[int] = []
+    scored_delays: list[int] = []
     scored = 0
     anomalous = 0
     skips: Counter[str] = Counter()
@@ -99,6 +104,7 @@ def _report_scored(payloads: list[bytes]) -> dict[str, Any]:
         machines[event.machine_id] += 1
         if event.is_scored:
             scored += 1
+            scored_delays.append(event.processing_delay_ms)
             if event.is_anomaly:
                 anomalous += 1
         elif event.skip_reason is not None:
@@ -115,10 +121,20 @@ def _report_scored(payloads: list[bytes]) -> dict[str, Any]:
         "anomalous_windows": anomalous,
         "skipped_by_reason": dict(skips),
         "machines": len(machines),
+        # Across every emission, scored or not. Dominated by windows still
+        # filling, so it describes publication earliness, not decision latency.
         "processing_delay_ms": {
             "min": min(delays) if delays else None,
             "median": int(statistics.median(delays)) if delays else None,
             "max": max(delays) if delays else None,
+        },
+        # The one that answers "how long until a window is judged". Only mature
+        # windows are scored (D-37), so these are necessarily at or after
+        # window_end and the figure is a real latency rather than an earliness.
+        "scored_delay_ms": {
+            "min": min(scored_delays) if scored_delays else None,
+            "median": int(statistics.median(scored_delays)) if scored_delays else None,
+            "max": max(scored_delays) if scored_delays else None,
         },
     }
 
