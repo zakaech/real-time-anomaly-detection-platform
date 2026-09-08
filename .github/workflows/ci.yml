@@ -220,16 +220,19 @@ jobs:
       #     on, or scoring is plausible and wrong;
       #   - artefact verification: the job must refuse an incompatible pickle
       #     rather than score with it;
+      #   - maturity: windows must not be scored while still filling, which was
+      #     measured flagging anomalies at ~100% against 1.0% for complete ones
+      #     (D-37). A regression here is an alert storm, not a test failure.
       #   - alerting: the deduplication rules that stop one incident becoming
       #     hundreds of alerts, including the timeout-behind-watermark case that
       #     killed a real recovery run.
       # The trained binary is a build output and is not committed, so the tests
       # that need it skip here and run locally; the verification rejections are
       # written to run without it.
-      - name: Feature conformance, artefact verification and alert deduplication
+      - name: Feature conformance, artefact verification, maturity and alert deduplication
         if: ${{ !cancelled() }}
         working-directory: stream-processor
-        run: pytest -q tests/test_feature_conformance.py tests/test_model.py tests/test_alerting.py
+        run: pytest -q tests/test_feature_conformance.py tests/test_model.py tests/test_maturity.py tests/test_alerting.py
 
   contracts:
     name: contracts (JSON Schema validity)
