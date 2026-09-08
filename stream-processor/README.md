@@ -12,14 +12,16 @@ The measured results of a real execution are in
 [`docs/10-phase-3-streaming.md`](../docs/10-phase-3-streaming.md). Every figure
 there comes from `inspect-stream` reading the topics back.
 
-> **Known defect, measured and open (D-37).** In update mode a window is scored
-> while it is still filling, and the model was trained on complete ones. Measured
-> on a live run: windows with 30-39 samples are flagged anomalous **100%** of the
-> time, complete windows **1.0%**. The result is an alert storm — 16 CRITICAL
-> alerts for 15 machines in five minutes. A backfill does not show this at all,
-> which is why it was found only by running in real time. The options and their
-> latency cost are in `docs/09-open-decisions.md` (D-37); it is deliberately not
-> patched without a new measurement.
+> **Windows are scored only once complete (D-37, ADR-004).** In update mode a
+> window is published while still filling, and the model was trained on complete
+> ones. Measured before the fix: windows with 30-39 samples were flagged
+> anomalous **100 %** of the time against **1.0 %** for complete ones, producing
+> 16 CRITICAL alerts for 15 machines in five minutes. A window is now scored
+> only when its event-time coverage spans the whole window at the machine's own
+> cadence, at **both** ends. After the fix, on the same scenario: **1 alert, on a
+> complete 60-sample window**, and the score arrives ~9 s after the window
+> closes. Immature windows are still published, with
+> `skip_reason=WINDOW_NOT_MATURE`.
 
 ## Pipeline
 

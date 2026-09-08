@@ -324,41 +324,52 @@ estimé.
 
 Détail complet : `docs/adr/ADR-003-watermark-and-output-mode.md`.
 
-### D-37 — Scorer ou non une fenêtre incomplète · `PROPOSÉ`
+### D-37 — Ne scorer qu'une fenêtre mature · `ACCEPTÉ`
 
-**Défaut mesuré en Phase 3, pas supposé.** En mode `update`, une fenêtre est publiée pendant qu'elle se
-remplit, et le seuil d'admission n'exige que 30 échantillons alors que le modèle a été entraîné sur des
-fenêtres complètes de 60. Mesure sur une exécution temps réel de 300 s
-(`docs/10-phase-3-streaming.md` § 5.6) :
+**Défaut mesuré en Phase 3, puis corrigé.** En mode `update`, une fenêtre est publiée pendant qu'elle se
+remplit, et le seuil d'admission n'exigeait que 30 échantillons alors que le modèle a été entraîné sur des
+fenêtres complètes de 60.
 
-| Échantillons à l'émission | Émissions | Jugées anormales |
+**Options** : (A) continuer à scorer les fenêtres intermédiaires — (B) ne scorer qu'une fenêtre suffisamment
+mature — (C) changer de modèle ou réentraîner sur des fenêtres partielles.
+
+| Critère | A | **B** | C |
+|---|---|---|---|
+| Latence | premier score ~30 s avant `window_end` | **+9 s après `window_end`** (mesuré) | inchangée |
+| Cohérence Phase 2 | rompue | **préservée** | nouveau modèle à revalider |
+| Complexité Spark | nulle | **faible** : 2 agrégats internes | nulle |
+| Volume Kafka | 5,67 émissions/fenêtre | **identique** | identique |
+| Watermark | sans rapport | **orthogonal** | sans rapport |
+| Données tardives | rescore, toujours partiel | **complète la fenêtre, qui devient scorable** | inchangé |
+| Alertes | tempête | **1 alerte / 15 machines** (mesuré) | dépend du réentraînement |
+
+**Retenu : B.** Seule option corrigeant la cause — donner au modèle une entrée qu'il n'a jamais vue — sans
+toucher au modèle, au seuil ni au jeu de features. C rouvrirait la Phase 2 ; A est le défaut lui-même.
+
+**La règle** : une fenêtre est mature quand sa couverture en temps d'événement s'étend sur toute la fenêtre,
+aux **deux** extrémités, à la cadence propre de la machine —
+`max(head_gap, tail_gap) ≤ mean_step × 2`. Une fenêtre immature est publiée avec `is_scored = false` et
+`skip_reason = WINDOW_NOT_MATURE` : le contrat est inchangé.
+
+**Maturité ≠ watermark**, et c'est le point central. Le watermark est une borne **globale** de retard, calculée
+sur le temps d'événement le plus récent de **toutes** les machines, et il sert à évincer l'état. La maturité
+est une propriété d'**une** fenêtre d'**une** machine, calculée sur son propre contenu. Attendre que le
+watermark dépasse `window_end` coûterait 90 s à chaque fenêtre, mélangerait les machines, et — surtout —
+**ne serait pas déterministe au rejeu**, puisque le watermark dépend de l'ordre d'arrivée. La règle retenue est
+une fonction pure des agrégats de la fenêtre.
+
+**Résultats mesurés** (même scénario, seul le code change) :
+
+| | Avant | Après |
 |---|---|---|
-| 30 – 39 | 383 | **100,0 %** |
-| 40 – 49 | 351 | 95,4 % |
-| 50 – 59 | 322 | 46,9 % |
-| 60 et plus | 292 | **1,0 %** |
+| Émissions anormales | 872 (64,7 %) | **2 (0,6 %)** |
+| Alertes / machines | 16 / 15 | **1 / 1** |
+| Fenêtres à 30–39 échantillons jugées anormales | **100,0 %** | *plus scorées* |
+| Fenêtres complètes jugées anormales | 1,0 % | **0,7 %** |
+| Fenêtres distinctes publiées | 540 | **540** |
+| Latence du score | — | **+9,1 s** après `window_end` |
 
-Une fenêtre incomplète est donc classée anormale presque systématiquement — non parce qu'elle est anormale,
-mais parce qu'elle est **hors distribution**. Conséquence observée : 16 alertes `CRITICAL` pour 15 machines en
-cinq minutes. Le backfill ne montrait rien (4 %), parce qu'une fenêtre y passe de vide à complète dans un seul
-lot.
-
-**Options** :
-
-- **(A) Ne scorer qu'une fenêtre complète** — publier les fenêtres partielles avec `is_scored = false` et un
-  motif dédié. Coût : le premier score d'une fenêtre arrive vers `window_end` au lieu de `window_end − 30 s`.
-  Le mode `update` conserve son intérêt pour l'état de fenêtre, mais plus pour la précocité du score.
-- **(B) Relever `MIN_SAMPLES_FOR_SCORING`** vers ~90 % de la taille attendue. Simple, mais la « taille
-  attendue » dépend de la cadence d'échantillonnage, que le job ne connaît pas ; et ce seuil est partagé avec
-  l'entraînement, donc le changer touche la Phase 2.
-- **(C) Entraîner aussi sur des fenêtres partielles**, pour que la distribution d'entraînement couvre ce que
-  la production produit réellement. Le plus correct statistiquement, le plus coûteux : il faut réentraîner et
-  réévaluer, donc rouvrir la Phase 2.
-
-**Recommandation : A.** C'est la seule option qui corrige la cause — scorer une entrée que le modèle n'a jamais
-vue — sans toucher au contrat d'entraînement ni au jeu de features. Elle est aussi la seule dont le coût est
-entièrement mesurable à l'avance : il est borné par la durée de la fenêtre.
-
-**Non corrigé volontairement dans la Phase 3.** Le défaut est chiffré et documenté ; le choix de la règle est
-un arbitrage, pas un détail d'implémentation, et le corriger à la hâte sans nouvelle mesure contredirait la
-règle qui a permis de le trouver.
+Une première version ne contrôlait que la **queue** : elle supprimait 93 % des émissions anormales et laissait
+**15 alertes sur 15 machines**, toutes sur le même `window_start` avec 44 échantillons — les fenêtres
+d'ouverture, tronquées au **début**. D'où le contrôle symétrique. Détail complet :
+`docs/adr/ADR-004-window-maturity.md` et `docs/10-phase-3-streaming.md` § 5.7.
