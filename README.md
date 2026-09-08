@@ -105,10 +105,12 @@ par construction un retard de publication important, et tout l'historique partir
 Les mesures d'exécution réelle sont dans [`docs/10-phase-3-streaming.md`](docs/10-phase-3-streaming.md), avec
 leurs conditions. Ce sont des mesures **locales**, pas un benchmark.
 
-Un défaut mesuré reste **ouvert** : en mode `update`, une fenêtre encore en cours de remplissage est scorée
-alors que le modèle a été entraîné sur des fenêtres complètes, ce qui la fait classer anormale dans près de
-100 % des cas contre 1,0 % pour une fenêtre complète. Options et coût en latence dans **D-37**
-([`docs/09`](docs/09-open-decisions.md)). Il est documenté et chiffré plutôt que corrigé sans nouvelle mesure.
+Un défaut mesuré puis **corrigé** (**D-37**, [ADR-004](docs/adr/ADR-004-window-maturity.md)) : en mode
+`update`, une fenêtre encore en cours de remplissage était scorée alors que le modèle a été entraîné sur des
+fenêtres complètes, ce qui la faisait classer anormale dans près de 100 % des cas contre 1,0 % pour une fenêtre
+complète — soit 16 alertes `CRITICAL` pour 15 machines. Une fenêtre n'est désormais scorée que lorsque sa
+couverture en temps d'événement s'étend sur toute la fenêtre. Après correction, même scénario : **1 alerte, sur
+une fenêtre complète**, score rendu ~9 s après la fermeture de la fenêtre.
 
 Vérifier la bibliothèque partagée (lint, format, typage strict, tests) :
 
@@ -143,6 +145,7 @@ Les décisions structurantes de la Phase 3 ont leur propre ADR :
 | [ADR-001](docs/adr/ADR-001-model-artifact-distribution.md) | distribution et vérification bloquante de l'artefact |
 | [ADR-002](docs/adr/ADR-002-dead-letter-envelope.md) | contrat de l'enveloppe de rebut, et ce qui n'y va pas |
 | [ADR-003](docs/adr/ADR-003-watermark-and-output-mode.md) | watermark 90 s et mode de sortie `update` |
+| [ADR-004](docs/adr/ADR-004-window-maturity.md) | maturité de fenêtre : ne scorer que ce que le modèle a appris |
 
 Les contrats de messages font foi dans [`contracts/json-schema/`](contracts/json-schema/), et
 [`contracts/examples/`](contracts/examples/) contient les messages d'exemple rejoués par les tests.

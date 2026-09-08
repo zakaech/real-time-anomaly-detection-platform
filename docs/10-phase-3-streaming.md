@@ -312,10 +312,165 @@ une fenêtre passe de vide à complète à l'intérieur d'un même lot, et n'est
 partiel. Le ratio de mise à jour de 1,04 le disait déjà. **Un test de charge en rejeu ne remplace pas une
 exécution temps réel**, et c'est la leçon la plus importante de cette phase.
 
-Ce défaut n'est **pas corrigé dans cette phase** : le corriger demande d'arbitrer entre plusieurs règles
-défendables, ce qui relève d'une décision et non d'un détail d'implémentation. Il est ouvert en **D-37**, avec
-les options et leur coût en latence. Il est documenté ici avec ses chiffres plutôt que corrigé à la hâte et
-sans mesure.
+**Ce défaut a été corrigé**, après arbitrage entre trois règles défendables. La décision, les options
+écartées et la distinction entre maturité et watermark sont dans [ADR-004](adr/ADR-004-window-maturity.md) ;
+les mesures avant/après sont en section 5.7 ci-dessous.
+### 5.7 Correction de D-37 — mesures avant / après
+
+Toutes les exécutions de cette section utilisent **le même scénario** : simulateur en temps réel, graine
+`515151`, 300 s, 15 machines, quatre messages fabriqués injectés en cours de route. Seul le code change, ce qui
+rend la comparaison exploitable.
+
+#### La règle
+
+Une fenêtre est **mature** quand sa couverture en temps d'événement s'étend sur toute la fenêtre, aux **deux**
+extrémités, à la cadence propre de la machine :
+
+```
+mean_step = (t_last − t_first) / (sample_count − 1)
+head_gap  = t_first − window_start
+tail_gap  = window_end − t_last
+mature    ⇔  max(head_gap, tail_gap) ≤ mean_step × 2
+```
+
+Une fenêtre immature est **publiée quand même**, avec `is_scored = false` et
+`skip_reason = WINDOW_NOT_MATURE`. Le contrat est inchangé. Détail et options écartées dans
+[ADR-004](adr/ADR-004-window-maturity.md).
+
+#### Deux itérations, parce que la première mesure a contredit la première correction
+
+| | **Avant** | **Queue seule** | **Deux extrémités** |
+|---|---|---|---|
+| Émissions scorées | 1 348 | 471 | **322** |
+| Émissions anormales | **872 (64,7 %)** | 61 (12,9 %) | **2 (0,6 %)** |
+| Fenêtres distinctes anormales | 47 | 47 | **2** |
+| **Alertes** | **16** | 15 | **1** |
+| Machines en alerte | **15 / 15** | **15 / 15** | **1 / 15** |
+
+La version « queue seule » supprimait 93 % des émissions anormales et laissait pourtant **le nombre d'alertes
+inchangé**. Publier ce résultat comme un succès aurait été faux ; la mesure suivante a expliqué pourquoi.
+
+**Les 15 alertes restantes portaient toutes le même `window_start`, avec exactement 44 échantillons, sur les
+15 machines.** Ce n'étaient pas quinze anomalies mais **une** : la première fenêtre de chaque machine, tronquée
+au **début** parce que le flux a commencé quinze secondes après son ouverture. La répartition des fenêtres
+anormales distinctes le confirmait sans ambiguïté — 15 à 30–39 échantillons, 15 à 40–49, 15 à 50–59, soit
+**une par machine dans chaque classe** : les trois fenêtres d'ouverture, de plus en plus couvertes.
+
+Une règle qui ne regarde que la fin les déclarait complètes. D'où le contrôle symétrique.
+
+#### Taux d'anomalie selon le remplissage de la fenêtre
+
+| Échantillons à l'émission | **Avant** | **Après** |
+|---|---|---|
+| 30 – 39 | 383 / 383 = **100,0 %** | *aucune fenêtre scorée* |
+| 40 – 49 | 335 / 351 = 95,4 % | *aucune fenêtre scorée* |
+| 50 – 59 | 151 / 322 = 46,9 % | 0 / 30 = **0,0 %** |
+| **60 et plus** | 3 / 292 = **1,0 %** | 2 / 292 = **0,7 %** |
+
+C'est le résultat central. **Les fenêtres incomplètes ne sont plus scorées du tout**, et les fenêtres complètes
+conservent exactement le comportement de la Phase 2 : 0,7 % contre 1,0 % avant, sur les **mêmes 292
+émissions**. La correction n'a pas déplacé le point de fonctionnement du modèle — elle a supprimé les entrées
+qu'il n'aurait jamais dû voir.
+
+L'unique alerte restante porte sur une fenêtre de **60 échantillons**, donc complète : c'est une détection
+ordinaire, pas un artefact. Sur 15 machines pendant 300 s, une alerte correspond à ~0,8 alerte par
+machine-heure, du même ordre que le budget de ~0,5 calibré en Phase 2.
+
+#### Impact sur `telemetry.scored`
+
+| | Avant | Après |
+|---|---|---|
+| Messages | 3 060 | 2 921 |
+| **Fenêtres distinctes** | **540** | **540** |
+| Ratio de mise à jour | 5,67 | 5,41 |
+| `WINDOW_NOT_MATURE` | — | **1 069** |
+| `INSUFFICIENT_SAMPLES` | 1 445 | 1 263 |
+| `MACHINE_NOT_RUNNING` | 267 | 267 |
+
+**Le volume ne change pas** : les 540 mêmes fenêtres sont publiées, avec le même rythme de mise à jour. Ce qui
+change est leur contenu — 1 069 émissions portent désormais un motif au lieu d'un score. La sémantique du
+contrat est préservée : aucune fenêtre n'est silencieusement supprimée, et une fenêtre non scorée reste
+distinguable d'une fenêtre saine.
+
+#### Impact sur `alerts`
+
+16 alertes sur 15 machines → **1 alerte sur 1 machine**, `consecutive_windows` toujours à 2 (min et max),
+**0 doublon**. Aucune modification de la requête d'alerte n'a été nécessaire : elle filtrait déjà
+`is_scored = true`, donc les fenêtres immatures en disparaissent par construction.
+
+#### Impact sur la latence
+
+C'est le coût de la correction, et il est réel.
+
+Mesuré sur une exécution dédiée du même scénario (2 882 émissions, 320 scorées) :
+
+| `processing_delay_ms` = `scored_at − window_end` | n | min | médiane | max |
+|---|---|---|---|---|
+| Toutes émissions | 2 882 | −52 998 | **−18 686** | 49 672 |
+| **Émissions scorées** | 320 | **+7 002** | **+9 064** | 49 672 |
+| Premier score de chaque fenêtre | 292 | +7 002 | +9 005 | 49 672 |
+
+Les deux lignes répondent à deux questions différentes, et les confondre était précisément l'erreur de
+lecture corrigée plus haut :
+
+- **toutes émissions, médiane −18,7 s** : les fenêtres en cours de remplissage sont toujours publiées
+  immédiatement. Le tableau de bord voit l'état d'une fenêtre exactement aussi tôt qu'avant la correction ;
+- **émissions scorées, médiane +9,1 s** : le verdict arrive environ neuf secondes après la fermeture de la
+  fenêtre — soit un déclenchement, ce qui est le minimum atteignable avec un déclencheur de 10 s.
+
+**C'est la décision qui attend, pas la donnée.** Et le point de comparaison est le mode `append`, qui
+publierait au plus tôt à `window_end + watermark`, soit **+90 s** : la maturité coûte ~9 s là où l'alternative
+naïve — attendre le watermark — en coûterait dix fois plus.
+
+Comme la statistique globale décrit une **précocité de publication** et non une latence de décision,
+`inspect-stream` rapporte désormais les deux séparément : une seule valeur mélangeant fenêtres scorées et non
+scorées ne répondait à aucune question utile.
+
+Cette exécution indépendante a par ailleurs **reproduit** le résultat : 1 alerte, 1 machine, sur une fenêtre
+complète de 60 échantillons de M-011, avec 3 fenêtres anormales toutes à 60 échantillons et plus.
+
+#### Canaux latéraux et rejeu
+
+Inchangés et revérifiés sur la même exécution : `telemetry.dlq` reçoit 3 messages, un par motif
+(`MALFORMED_JSON`, `SCHEMA_VALIDATION_FAILED`, `UNSUPPORTED_SCHEMA_VERSION`), **tous les trois rejouables** ;
+`telemetry.late` reçoit 1 message avec un retard mesuré de **300,0 s**, exactement celui construit.
+
+#### Backfill et reprise après crash
+
+Le rejeu de 4 heures a été refait entièrement, avec `SIGKILL` et redémarrage, pour vérifier que la nouvelle
+règle ne casse rien.
+
+| | Avant la correction | Après |
+|---|---|---|
+| **Fenêtres distinctes** | **21 690** | **21 690** |
+| Messages `telemetry.scored` | 22 581 | 23 647 |
+| Fenêtres scorées | 18 331 | 18 834 |
+| Fenêtres anormales | 746 | **330** |
+| Identifiants d'alerte distincts | 181 | **45** |
+| `WINDOW_NOT_MATURE` | — | 459 |
+| Ratio de mise à jour | 1,04 | 1,09 |
+
+**Les 21 690 fenêtres distinctes sont identiques**, ce qui est l'invariant qui compte : la correction ne perd
+aucune fenêtre, elle change seulement lesquelles reçoivent un score.
+
+Le backfill était bien moins affecté que le temps réel — 459 fenêtres immatures contre 1 069 — mais il ne
+l'était pas *pas du tout* : les bords de l'historique rejoué et les redémarrages de machine produisent aussi
+des fenêtres partielles. Cela a suffi à faire tomber les alertes distinctes de 181 à 45.
+
+Le test de crash reste valide :
+
+| Étape | Résultat |
+|---|---|
+| État à t+100 s | 10 438 scorés, 18 alertes ; lots validation 7 / scoring 5 / alerting 5 |
+| Signal | `SIGKILL`, exit **137**, `oomkilled: false` |
+| Lots au redémarrage | validation **8**, scoring **6**, alerting **6** — reprise, pas redémarrage |
+| Sortie de la reprise | **0**, **0 erreur** |
+| Doublons de livraison | 0 sur cette exécution |
+
+Zéro doublon cette fois, contre 8 lors du test précédent : le crash n'est pas tombé au même endroit et le lot
+non commité rejoué ne contenait aucune alerte. C'est bien de l'**at-least-once** — les doublons sont possibles,
+pas garantis. Les compter reste la seule façon honnête de documenter la sémantique.
+
 ## 6. Incidents rencontrés, et ce qu'ils ont coûté
 
 Cette section est écrite pour la soutenance : chaque entrée est un problème réel, avec son symptôme, sa cause
