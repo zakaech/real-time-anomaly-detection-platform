@@ -29,7 +29,9 @@ upsert downstream absorbs it. That is not exactly-once and is not claimed to be.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -42,9 +44,10 @@ from pyspark.sql.types import (
     StructType,
 )
 from telemetry_core.codec import encode
+from telemetry_core.errors import SchemaValidationError
 from telemetry_core.ids import derive_alert_id
 from telemetry_core.schemas import Alert, FeatureContribution, ModelRef
-from telemetry_core.timeutil import utc_now
+from telemetry_core.timeutil import parse_instant, utc_now
 
 from stream_processor.policy import severity_for, to_utc_datetime
 
@@ -95,6 +98,32 @@ def _contributors(raw: Any) -> tuple[FeatureContribution, ...]:
             continue
         contributions.append(FeatureContribution(feature=str(feature), z_score=float(z_score)))
     return tuple(contributions)
+
+
+def _optional_text(value: Any) -> str | None:
+    """A nullable string column, as pandas hands it over.
+
+    Arrow renders SQL NULL as ``None`` but a missing column as ``NaN``, and
+    ``str(nan)`` is the string ``"nan"`` -- which would sail straight through the
+    contract's 64-hex pattern check and fail there instead of here.
+    """
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    text = str(value)
+    return text or None
+
+
+def _optional_instant(value: Any) -> datetime | None:
+    """Parse an optional ISO instant, tolerating an absent artefact timestamp."""
+    text = _optional_text(value)
+    if text is None:
+        return None
+    try:
+        return parse_instant(text)
+    except SchemaValidationError:
+        # A malformed timestamp must not cost us the alert: the field is
+        # provenance, and the alert is the operational signal.
+        return None
 
 
 def make_alert_state_handler(*, consecutive_to_open: int, gap_seconds: int) -> Any:
@@ -156,7 +185,12 @@ def make_alert_state_handler(*, consecutive_to_open: int, gap_seconds: int) -> A
                 continue
 
             row = by_window[window_start]
-            model_ref = ModelRef(name=str(row["model_name"]), version=str(row["model_version"]))
+            model_ref = ModelRef(
+                name=str(row["model_name"]),
+                version=str(row["model_version"]),
+                trained_at=_optional_instant(row.get("model_trained_at")),
+                artifact_sha256=_optional_text(row.get("model_artifact_sha256")),
+            )
             opening_start = to_utc_datetime(row["window_start"])
             opening_end = to_utc_datetime(row["window_end"])
             score = float(row["anomaly_score"])
