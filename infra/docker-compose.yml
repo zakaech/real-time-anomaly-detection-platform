@@ -245,6 +245,13 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_INTERNAL_BOOTSTRAP}
       KAFKA_TOPIC_ALERTS: ${KAFKA_TOPIC_ALERTS}
       KAFKA_TOPIC_TELEMETRY_DLQ: ${KAFKA_TOPIC_TELEMETRY_DLQ}
+      # Consumed so the dashboard can draw a real sensor curve (D-41), under its
+      # own consumer group: this topic carries far more traffic than `alerts`
+      # and must never delay the operator queue.
+      KAFKA_TOPIC_TELEMETRY_SCORED: ${KAFKA_TOPIC_TELEMETRY_SCORED}
+      KAFKA_TELEMETRY_GROUP: ${ALERT_SERVICE_TELEMETRY_GROUP:-alert-service-telemetry}
+      KAFKA_TELEMETRY_CONCURRENCY: ${ALERT_SERVICE_TELEMETRY_CONCURRENCY:-2}
+      TELEMETRY_RETENTION_HOURS: ${TELEMETRY_RETENTION_HOURS:-72}
       KAFKA_CONSUMER_GROUP: ${ALERT_SERVICE_CONSUMER_GROUP:-alert-service}
       # The alerts topic has 3 partitions; more threads than partitions idle.
       KAFKA_CONSUMER_CONCURRENCY: ${ALERT_SERVICE_CONCURRENCY:-3}
