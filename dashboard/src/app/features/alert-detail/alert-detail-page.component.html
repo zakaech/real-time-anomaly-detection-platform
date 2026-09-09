@@ -1,0 +1,127 @@
+@if (error(); as err) {
+  <app-error-state
+    [title]="err.isNotFound ? 'Alerte introuvable' : 'Impossible de charger l\'alerte'"
+    [message]="err.message"
+    [traceId]="err.problem?.traceId ?? null"
+    (retry)="load(alertId())"
+  />
+} @else if (loading()) {
+  <app-loading-state message="Chargement de l'alerte..." />
+} @else if (alert(); as detail) {
+  <article class="detail">
+    <header class="detail-header">
+      <div>
+        <h2>
+          {{ detail.machineCode }}
+          <span class="line">{{ detail.lineCode }}</span>
+          @if (detail.machineType) {
+            <span class="type">{{ detail.machineType }}</span>
+          }
+        </h2>
+        <p class="when">Détectée le {{ detail.detectedAt | dateTime }}</p>
+      </div>
+      <div class="badges">
+        <app-severity-badge [severity]="detail.severity" />
+        <app-status-badge [status]="detail.status" />
+      </div>
+    </header>
+
+    @if (acknowledged()) {
+      <p class="ack-feedback" role="status">Alerte acquittée.</p>
+    }
+
+    <section class="cards">
+      <div class="card">
+        <span class="label">Score d'anomalie</span>
+        <span class="value mono">{{ detail.anomalyScore | score }}</span>
+        <span class="hint">seuil {{ detail.scoreThreshold | score }}</span>
+      </div>
+      <div class="card">
+        <span class="label">Fenêtre</span>
+        <span class="value">{{ detail.windowStart | dateTime }}</span>
+        <span class="hint">durée {{ detail.windowStart | durationSeconds: detail.windowEnd }}</span>
+      </div>
+      <div class="card">
+        <span class="label">Fenêtres consécutives</span>
+        <span class="value">{{ detail.consecutiveWindows }}</span>
+        <span class="hint">hystérésis avant ouverture</span>
+      </div>
+      <div class="card">
+        <span class="label">Publiée / ingérée</span>
+        <span class="value small">{{ detail.publishedAt | dateTime }}</span>
+        <span class="hint">{{ detail.ingestedAt | dateTime }}</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Télémétrie de la machine</h3>
+      <p class="panel-note">
+        Moyennes par fenêtre calculées par le pipeline. Les mesures brutes ne sont pas
+        conservées&nbsp;; une absence de mesure laisse un trou dans la courbe plutôt qu'un trait.
+      </p>
+      <app-telemetry-chart
+        [series]="telemetry()"
+        [windowStart]="detail.windowStart"
+        [windowEnd]="detail.windowEnd"
+      />
+    </section>
+
+    <div class="two-columns">
+      <section class="panel">
+        <h3>Principaux contributeurs</h3>
+        <app-contributor-chart [contributors]="detail.topContributors" />
+      </section>
+
+      <section class="panel">
+        <h3>Modèle</h3>
+        <dl class="model">
+          <dt>Nom</dt>
+          <dd class="mono">{{ detail.model.name }}</dd>
+          <dt>Version</dt>
+          <dd class="mono">{{ detail.model.version }}</dd>
+          <dt>Entraîné le</dt>
+          <dd>{{ detail.model.trainedAt | dateTime }}</dd>
+          <dt>Empreinte de l'artefact</dt>
+          <dd class="mono break">{{ detail.model.artifactSha256 ?? '—' }}</dd>
+        </dl>
+      </section>
+    </div>
+
+    <div class="two-columns">
+      <section class="panel">
+        <h3>Historique</h3>
+        @if (detail.history.length === 0) {
+          <p class="panel-note">Aucune action opérateur pour le moment.</p>
+        } @else {
+          <ul class="history">
+            @for (entry of detail.history; track entry.occurredAt) {
+              <li>
+                <span class="mono">{{ entry.occurredAt | dateTime }}</span>
+                <strong>{{ entry.actor }}</strong>
+                <span>{{ entry.previousStatus }} → {{ entry.newStatus }}</span>
+                @if (entry.comment) {
+                  <p class="comment">{{ entry.comment }}</p>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      @if (canAcknowledge()) {
+        <app-acknowledge-form
+          [busy]="acknowledging()"
+          [conflict]="conflictMessage()"
+          (acknowledge)="onAcknowledge($event)"
+        />
+      } @else {
+        <section class="panel">
+          <h3>Acquittement</h3>
+          <p class="panel-note">
+            Cette alerte est déjà au statut {{ detail.status }} et ne peut plus être acquittée.
+          </p>
+        </section>
+      }
+    </div>
+  </article>
+}

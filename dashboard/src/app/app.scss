@@ -1,0 +1,88 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.shell-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.5rem;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+  }
+}
+
+.brand-mark {
+  width: 0.65rem;
+  height: 1.6rem;
+  border-radius: 2px;
+  background: linear-gradient(#38bdf8, #0ea5e9);
+}
+
+nav {
+  display: flex;
+  gap: 0.35rem;
+
+  a {
+    padding: 0.45rem 0.9rem;
+    border-radius: 6px;
+    color: #cbd5e1;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+
+    &:hover {
+      background: #1e293b;
+      color: #f8fafc;
+    }
+
+    &.active {
+      background: #1d4ed8;
+      color: #fff;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #38bdf8;
+      outline-offset: 2px;
+    }
+  }
+}
+
+main {
+  padding: 1.25rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Tablet: the header stacks rather than crushing the navigation. */
+@media (max-width: 720px) {
+  .shell-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  main {
+    padding: 0.85rem;
+  }
+}
