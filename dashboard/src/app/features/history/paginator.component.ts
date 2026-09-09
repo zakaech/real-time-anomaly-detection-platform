@@ -12,9 +12,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="paginator" aria-label="Pagination">
-      <span class="summary">
-        {{ rangeLabel() }} sur {{ totalElements() }}
-      </span>
+      <span class="summary"> {{ rangeLabel() }} sur {{ totalElements() }} </span>
       <div class="controls">
         <button type="button" [disabled]="page() === 0 || busy()" (click)="goTo.emit(0)">
           « Première

@@ -33,8 +33,8 @@ import { SeverityCountersComponent } from './severity-counters.component';
         <div>
           <h2>Flux temps réel</h2>
           <p class="subtitle">
-            Alertes poussées par le serveur. Le flux accélère l'affichage&nbsp;; la source de
-            vérité reste PostgreSQL.
+            Alertes poussées par le serveur. Le flux accélère l'affichage&nbsp;; la source de vérité
+            reste PostgreSQL.
           </p>
         </div>
         <app-connection-indicator [state]="store.connectionState()" />

@@ -14,14 +14,8 @@ import { TelemetrySeries } from '../../core/models/telemetry.model';
 import { SeverityBadgeComponent } from '../../shared/severity-badge.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { DateTimePipe, DurationSecondsPipe, ScorePipe } from '../../shared/format.pipes';
-import {
-  ErrorStateComponent,
-  LoadingStateComponent,
-} from '../../shared/state-views.component';
-import {
-  AcknowledgeFormComponent,
-  AcknowledgeSubmission,
-} from './acknowledge-form.component';
+import { ErrorStateComponent, LoadingStateComponent } from '../../shared/state-views.component';
+import { AcknowledgeFormComponent, AcknowledgeSubmission } from './acknowledge-form.component';
 import { ContributorChartComponent } from './contributor-chart.component';
 import { TelemetryChartComponent } from './telemetry-chart.component';
 

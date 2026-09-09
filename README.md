@@ -3,12 +3,13 @@
 Plateforme temps réel de détection d'anomalies sur télémétrie de capteurs industriels : ingestion continue,
 enrichissement, scoring par modèle non supervisé, alertes persistées et workflow d'acquittement opérateur.
 
-**État : Phase 4 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
+**État : Phase 5 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
 `telemetry-core`, [`event-simulator`](event-simulator/) qui alimente `telemetry.raw` et `telemetry.labels`,
 [`ml-training`](ml-training/) qui entraîne, évalue et sérialise le détecteur,
 [`stream-processor`](stream-processor/) qui score le flux en continu et publie `telemetry.scored` et
 `alerts`, et [`alert-service`](alert-service/) qui persiste les alertes de façon idempotente dans PostgreSQL
-et expose l'API opérateur (REST + SSE). Le dashboard Angular reste à écrire.
+et expose l'API opérateur (REST + SSE), et [`dashboard`](dashboard/) qui présente le flux temps réel,
+l'historique filtrable et le détail d'une alerte avec la courbe capteur de la machine.
 
 ## Pile technique
 
@@ -120,6 +121,22 @@ La sémantique est **at-least-once Kafka + idempotence PostgreSQL**, donc *effec
 Ce n'est pas de l'exactly-once : l'unicité est portée par un `INSERT ... ON CONFLICT ... RETURNING (xmax = 0)`,
 pas par du code Java ([ADR-005](docs/adr/ADR-005-idempotent-persistence.md)).
 
+## Superviser depuis le dashboard
+
+```sh
+docker compose --env-file .env -f infra/docker-compose.yml up -d dashboard
+# puis http://localhost:4200
+```
+
+Trois écrans : flux temps réel (SSE), historique filtrable, détail d'alerte avec la **courbe capteur réelle**
+de la machine et les anomalies marquées dessus. nginx sert le SPA et relaie `/api` vers `alert-service` : le
+navigateur ne voit qu'une seule origine, donc **aucun CORS à configurer** ([D-42](docs/09-open-decisions.md)).
+
+Les courbes existent parce que la Phase 5 a ajouté la persistance des fenêtres scorées
+([ADR-008](docs/adr/ADR-008-telemetry-persistence.md)) : la télémétrie brute n'est conservée nulle part, et
+sans cette extension toute courbe affichée aurait été inventée. Une mesure manquante **laisse un trou** dans la
+courbe plutôt qu'un trait.
+
 Les mesures d'exécution réelle sont dans [`docs/10-phase-3-streaming.md`](docs/10-phase-3-streaming.md), avec
 leurs conditions. Ce sont des mesures **locales**, pas un benchmark.
 
@@ -167,13 +184,15 @@ Les décisions structurantes de la Phase 3 ont leur propre ADR :
 | [ADR-005](docs/adr/ADR-005-idempotent-persistence.md) | idempotence Kafka vers PostgreSQL, garantie par la base |
 | [ADR-006](docs/adr/ADR-006-error-classification.md) | erreurs transitoires, erreurs de données, doublons |
 | [ADR-007](docs/adr/ADR-007-persistence-model.md) | modèle de persistance et clé d'idempotence |
+| [ADR-008](docs/adr/ADR-008-telemetry-persistence.md) | persistance de la télémétrie pour les courbes du dashboard |
 
 Les contrats de messages font foi dans [`contracts/json-schema/`](contracts/json-schema/), et
 [`contracts/examples/`](contracts/examples/) contient les messages d'exemple rejoués par les tests.
 
 Chaque composant a son propre README : [`libs/telemetry-core/`](libs/telemetry-core/README.md),
 [`event-simulator/`](event-simulator/README.md), [`ml-training/`](ml-training/README.md),
-[`stream-processor/`](stream-processor/README.md), [`alert-service/`](alert-service/README.md).
+[`stream-processor/`](stream-processor/README.md), [`alert-service/`](alert-service/README.md),
+[`dashboard/`](dashboard/README.md).
 
 ## Sur les chiffres
 
