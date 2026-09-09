@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Structured JSON logs, matching what the Python components emit through
+  telemetry_core.logging. One log format across the platform is what makes it
+  possible to follow a single alert from the simulator, through Spark, into this
+  service. Correlating three different shapes of log line by hand is the kind
+  of task nobody does during an incident.
+
+  Everything put in the MDC is included: alert_id, machine_id, kafka_partition,
+  kafka_offset and traceId.
+-->
+<configuration>
+  <springProperty scope="context" name="serviceName" source="spring.application.name" defaultValue="alert-service"/>
+
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <timeZone>UTC</timeZone>
+      <fieldNames>
+        <timestamp>timestamp</timestamp>
+        <message>event</message>
+        <logger>logger</logger>
+        <thread>thread</thread>
+        <levelValue>[ignore]</levelValue>
+        <version>[ignore]</version>
+      </fieldNames>
+      <customFields>{"service":"${serviceName}","version":"0.1.0"}</customFields>
+      <includeMdcKeyName>alert_id</includeMdcKeyName>
+      <includeMdcKeyName>machine_id</includeMdcKeyName>
+      <includeMdcKeyName>kafka_partition</includeMdcKeyName>
+      <includeMdcKeyName>kafka_offset</includeMdcKeyName>
+      <includeMdcKeyName>traceId</includeMdcKeyName>
+    </encoder>
+  </appender>
+
+  <!--
+    Plain text for tests: a JSON line per assertion failure is unreadable in a
+    build log, and nothing consumes test logs programmatically.
+  -->
+  <springProfile name="test">
+    <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+      </encoder>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="PLAIN"/>
+    </root>
+  </springProfile>
+
+  <springProfile name="!test">
+    <root level="INFO">
+      <appender-ref ref="JSON"/>
+    </root>
+  </springProfile>
+</configuration>

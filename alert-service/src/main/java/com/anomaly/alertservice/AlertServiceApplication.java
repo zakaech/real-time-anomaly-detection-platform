@@ -1,0 +1,27 @@
+package com.anomaly.alertservice;
+
+import com.anomaly.alertservice.config.AlertServiceProperties;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+
+/**
+ * Consumes the {@code alerts} topic, persists each alert idempotently, and
+ * serves the operator API.
+ *
+ * <p>The delivery semantics of the whole chain are <strong>at-least-once from
+ * Kafka plus idempotence in PostgreSQL</strong>, which yields effectively-once
+ * persistence. This is deliberately <em>not</em> exactly-once: the Kafka sink
+ * upstream is not transactional, and a restart replays the uncommitted batch.
+ * Phase 3's crash test measured 8 duplicate alert deliveries on one run and 0 on
+ * another -- duplicates are possible, not guaranteed, and the database is what
+ * makes them harmless.
+ */
+@SpringBootApplication
+@EnableConfigurationProperties(AlertServiceProperties.class)
+public class AlertServiceApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlertServiceApplication.class, args);
+    }
+}

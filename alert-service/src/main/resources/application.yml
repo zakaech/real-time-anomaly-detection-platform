@@ -1,0 +1,123 @@
+spring:
+  application:
+    name: alert-service
+
+  datasource:
+    # No defaults for host or credentials. A default is a hard-coded value that
+    # stays invisible until someone misspells a variable name -- the same rule
+    # the Python components follow (telemetry_core.config).
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      # Three consumer threads (one per partition of `alerts`) plus the web
+      # tier. Ten is comfortable; a pool larger than the database can serve only
+      # moves the queue.
+      maximum-pool-size: 10
+      pool-name: alert-service-pool
+
+  jpa:
+    hibernate:
+      # NEVER `update`. Flyway owns the schema; `validate` makes Hibernate check
+      # the migration rather than modify it, so an entity that drifts from the
+      # migration fails at startup instead of silently altering a table.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 25
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # The schema is created by V1 on an empty database, so no baseline is
+    # needed; setting it would hide a migration that failed to run.
+    baseline-on-migrate: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:alert-service}
+      # earliest, and it is safe precisely because persistence is idempotent:
+      # a cold start replays the retention window and inserts nothing twice.
+      auto-offset-reset: earliest
+      # Offsets are committed by the container after the database transaction
+      # commits. Automatic commits could acknowledge a message that was never
+      # persisted, which is the one failure that loses an alert.
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Bytes, not a JSON deserializer. A deserializer that throws does so
+      # inside poll(), out of reach of the error handler, and the original
+      # payload is lost -- so the dead letter would not be replayable.
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      max-poll-records: 100
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+    listener:
+      # The offset is committed immediately after the listener returns, which is
+      # after the database transaction has committed.
+      ack-mode: manual_immediate
+      # The `alerts` topic has 3 partitions; more threads than partitions leaves
+      # consumers idle.
+      concurrency: ${KAFKA_CONSUMER_CONCURRENCY:3}
+
+  threads:
+    virtual:
+      enabled: false
+
+server:
+  port: ${ALERT_SERVICE_PORT:8080}
+  error:
+    # Errors are produced by the exception handler as ProblemDetail. Whitelabel
+    # pages and stack traces in responses leak internal structure.
+    whitelabel:
+      enabled: false
+
+alert-service:
+  kafka:
+    topic-alerts: ${KAFKA_TOPIC_ALERTS:alerts}
+    topic-dlq: ${KAFKA_TOPIC_TELEMETRY_DLQ:telemetry.dlq}
+    # Transient failures retry without exhausting: a database outage must never
+    # turn valid alerts into dead letters (ADR-002). The cap bounds the retry
+    # rate, not the number of attempts.
+    retry-initial-interval-ms: 1000
+    retry-multiplier: 2.0
+    retry-max-interval-ms: 30000
+  sse:
+    # Without traffic a proxy closes an idle connection after 30-60s and the
+    # dashboard stops updating while still looking connected -- the most
+    # deceptive failure mode a live display has.
+    heartbeat-interval-ms: 15000
+    # Bounded per client. A slow consumer is disconnected rather than allowed to
+    # accumulate; it reconnects and catches up through Last-Event-ID.
+    client-queue-capacity: 256
+    # How many missed alerts a reconnecting client may replay in one go.
+    max-replay-events: 500
+  api:
+    default-page-size: 20
+    max-page-size: 100
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.anomaly.alertservice: ${LOG_LEVEL:INFO}
