@@ -1,0 +1,10 @@
+# Shell scripts must keep LF endings whatever the checkout platform.
+#
+# A CRLF shebang makes the interpreter "not found" inside a Linux container --
+# the script exists, is executable, and still fails. It cost one debugging cycle
+# on the dashboard entrypoint; this makes it impossible to reintroduce by
+# checking the repository out on Windows.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

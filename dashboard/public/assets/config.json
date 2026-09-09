@@ -1,0 +1,6 @@
+{
+  "apiBaseUrl": "/api/v1",
+  "liveFeedLimit": 100,
+  "sseInitialBackoffMs": 1000,
+  "sseMaxBackoffMs": 30000
+}
