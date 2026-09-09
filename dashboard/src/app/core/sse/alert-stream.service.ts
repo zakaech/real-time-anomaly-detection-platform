@@ -70,7 +70,9 @@ export class AlertStreamService implements OnDestroy {
   }
 
   private open(): void {
-    this.stateSignal.set(this.backoffMs === this.config.sseInitialBackoffMs ? 'connecting' : 'reconnecting');
+    this.stateSignal.set(
+      this.backoffMs === this.config.sseInitialBackoffMs ? 'connecting' : 'reconnecting',
+    );
 
     const url = `${this.config.apiBaseUrl}/alerts/stream`;
     const source = new EventSource(url);

@@ -23,13 +23,7 @@ interface Column {
 @Component({
   selector: 'app-alert-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    RouterLink,
-    SeverityBadgeComponent,
-    StatusBadgeComponent,
-    DateTimePipe,
-    ScorePipe,
-  ],
+  imports: [RouterLink, SeverityBadgeComponent, StatusBadgeComponent, DateTimePipe, ScorePipe],
   template: `
     <div class="table-wrapper">
       <table>

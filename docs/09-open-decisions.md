@@ -418,3 +418,72 @@ un seul compte, et aucun ne l'apprend.
 Arbitré en Phase 4, et différemment de la recommandation initiale (lecture JDBC depuis Spark). Le référentiel
 est **alimenté par le seed Flyway et complété par le flux** (D-39). Le job Spark n'a besoin d'aucun
 référentiel : il ne lit que `machine_id` et `line_id`, qui voyagent déjà sur chaque message.
+
+### D-41 — Source des courbes de télémétrie · `ACCEPTÉ`
+
+**Options** : (A) pas de courbe capteur, seulement le score et les contributeurs — (B) persister les fenêtres
+scorées et exposer une API dédiée — (C) faire porter les 52 features par l'alerte (modifie Spark).
+
+**Retenu : B.** Le constat qui a tranché : `telemetry.scored` **contient réellement** les moyennes capteur par
+fenêtre — vérifié sur un message du topic (`temperature_c_mean = 45.97`, `vibration_mm_s_mean = 1.13`, …) —
+mais elles n'atteignaient ni PostgreSQL ni l'API. Sans B, toute courbe affichée aurait été **inventée**.
+
+L'extension est **strictement limitée** : 5 moyennes capteur, le score, le drapeau d'anomalie et de quoi
+distinguer une fenêtre partielle d'une fenêtre complète. Les 47 autres features ne sont pas stockées — le
+dashboard trace cinq lignes, pas une matrice d'entraînement. **Spark n'est pas modifié.**
+
+Volume mesuré : ~5 700 lignes/heure après déduplication (11 342 mises à jour de fenêtre pour 2 h de télémétrie
+sur 15 machines). Écriture idempotente sur `(machine_id, window_start)`, purge planifiée.
+
+### D-42 — CORS · `ACCEPTÉ`
+
+Vérifié en direct : `OPTIONS /api/v1/alerts` avec `Origin: http://localhost:4200` renvoie **403**, sans aucun
+en-tête `Access-Control-*`. **Retenu : reverse proxy** (nginx en production, `proxy.conf.json` en
+développement). Le navigateur ne voit qu'une origine : le problème est **supprimé** au lieu d'être contourné,
+et le backend n'est pas modifié.
+
+⚠️ Le proxy SSE exige `proxy_buffering off` ; sans cela nginx retient le flux et le dashboard affiche
+« connecté » sans jamais rien recevoir.
+
+### D-43 — Bibliothèque de graphiques · `ACCEPTÉ`
+
+**Chart.js 4 sans wrapper.** Comparaison factuelle des dépendances : ECharts + `ngx-echarts` (60,3 Mo
+dépaquetés, peer `@angular/core >= 22`), Chart.js + `ng2-charts` (peer `>= 21` **et** `@angular/cdk`), Plotly
+(5,6 Mo), D3 (tout à écrire). **Chart.js est le seul sans aucun peer Angular** (`peerDependencies` vide) : il
+ne peut donc pas bloquer une montée de version Angular.
+
+Mesuré : la page de détail est un chunk paresseux de 241,58 kB, hors du bundle initial (263,93 kB / 73,62 kB
+transférés).
+
+### D-44 — Gestion d'état · `ACCEPTÉ`
+
+**Services + signals, pas de NgRx.** Trois pages et une seule source de vérité ne justifient pas actions,
+reducers, effects et selectors au-dessus d'une `Map`.
+
+### D-45 — `z_score` en snake_case · `ACCEPTÉ`
+
+Vérifié sur la réponse réelle : `topContributors` est en camelCase mais son champ interne est `z_score`. Le
+backend réutilise un DTO pour le message Kafka et la réponse REST, et le côté Kafka est en snake_case. **Le
+modèle TypeScript le reproduit fidèlement** — le renommer ferait mentir le modèle sur le contrat réel.
+
+### D-46 — `Last-Event-ID` · `ACCEPTÉ`
+
+**Contrainte technique réelle** : `EventSource` **ne permet pas de définir d'en-têtes**. `Last-Event-ID` est
+envoyé **par le navigateur**, **automatiquement**, et **uniquement lors d'une reconnexion**.
+
+**Retenu : `EventSource` natif + resynchronisation REST.** Le navigateur couvre le trou court ; la requête REST
+couvre le trou long, y compris au-delà des 500 événements rejoués par le backend. Écrire un parseur SSE sur
+`fetch` pour contrôler l'en-tête reviendrait à réimplémenter reconnexion et découpage de trames pour un
+problème que la base résout déjà.
+
+La reconnexion native est **désactivée** au profit d'un backoff exponentiel applicatif : le navigateur réessaie
+à intervalle fixe et martèlerait un backend en panne.
+
+### D-47 — Version Angular · `ACCEPTÉ` — **Angular 21.2.23**, pas 22
+
+La validation était conditionnelle (« si la compatibilité npm/build est confirmée »). Elle **ne l'est pas** :
+le CLI Angular 22 exige Node `^22.22.3` et la machine exécute **v22.14.0**. Angular 21.2 exige `^22.12.0` et
+construit proprement. C'est la version la plus récente réellement compatible avec la chaîne d'outils vérifiée.
+
+Conséquence : Angular 21 génère des tests **Vitest + jsdom**, pas Karma/Jasmine. La chaîne fournie est utilisée
+telle quelle.

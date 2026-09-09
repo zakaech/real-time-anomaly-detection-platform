@@ -2,11 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
-import {
-  AcknowledgeRequest,
-  AlertDetail,
-  AlertSummary,
-} from '../models/alert.model';
+import { AcknowledgeRequest, AlertDetail, AlertSummary } from '../models/alert.model';
 import { AlertQuery, MAX_PAGE_SIZE } from '../models/filters.model';
 import { PageResponse } from '../models/page.model';
 import { AlertStatistics, StatsGranularity } from '../models/statistics.model';

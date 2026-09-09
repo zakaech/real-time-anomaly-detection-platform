@@ -27,9 +27,7 @@ export const httpErrorInterceptor: HttpInterceptorFn = (request, next) =>
       // the proxy being down. It reads differently from a server error and the
       // UI says so instead of blaming the backend.
       const message =
-        error.status === 0
-          ? 'Le serveur est injoignable'
-          : (problem?.detail ?? error.message);
+        error.status === 0 ? 'Le serveur est injoignable' : (problem?.detail ?? error.message);
 
       return throwError(() => new ApiError(error.status, problem, message));
     }),

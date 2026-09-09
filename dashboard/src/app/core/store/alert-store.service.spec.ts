@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -204,14 +201,16 @@ describe('AlertStoreService', () => {
     flushInitialLoad([alert('a'), alert('b')]);
 
     connections$.next();
-    http.expectOne((r) => r.url === '/api/v1/alerts').flush({
-      content: [alert('b')],
-      page: 0,
-      size: 100,
-      totalElements: 1,
-      totalPages: 1,
-      last: true,
-    });
+    http
+      .expectOne((r) => r.url === '/api/v1/alerts')
+      .flush({
+        content: [alert('b')],
+        page: 0,
+        size: 100,
+        totalElements: 1,
+        totalPages: 1,
+        last: true,
+      });
 
     // The API is authoritative: keeping 'a' because we saw it once would leave
     // the dashboard showing an alert the database no longer returns.
@@ -223,7 +222,10 @@ describe('AlertStoreService', () => {
     store.start();
     http
       .expectOne((r) => r.url === '/api/v1/alerts')
-      .flush({ title: 'Internal error', status: 500, detail: 'boom' }, { status: 500, statusText: 'Server Error' });
+      .flush(
+        { title: 'Internal error', status: 500, detail: 'boom' },
+        { status: 500, statusText: 'Server Error' },
+      );
 
     expect(store.error()).toBeTruthy();
     expect(store.loading()).toBe(false);

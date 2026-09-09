@@ -272,6 +272,44 @@ jobs:
         working-directory: alert-service
         run: mvn -B test -Dtest='AlertIdempotencyTest,AlertConsumerTest,ContractConformanceTest' -Dsurefire.failIfNoSpecifiedTests=false
 
+  dashboard:
+    name: dashboard (lint, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Angular 21 requires ^20.19 || ^22.12 || >=24. Pinned to the major the
+          # project was built and tested on rather than "latest", so a new Node
+          # release cannot break the build without anyone changing a file.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      # --legacy-peer-deps because npm 10.9 crashes resolving the vitest peer
+      # graph ("Cannot read properties of null (reading edgesOut)"). The lock
+      # file was produced the same way, so `ci` is still reproducible.
+      - name: Install
+        working-directory: dashboard
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+
+      - name: Format check
+        if: ${{ !cancelled() }}
+        working-directory: dashboard
+        run: npm run format:check
+
+      # Vitest with jsdom, which is what Angular 21 scaffolds -- not Karma.
+      - name: Tests
+        if: ${{ !cancelled() }}
+        working-directory: dashboard
+        run: npm run test:ci
+
+      - name: Production build
+        if: ${{ !cancelled() }}
+        working-directory: dashboard
+        run: npm run build:prod
+
   contracts:
     name: contracts (JSON Schema validity)
     runs-on: ubuntu-latest

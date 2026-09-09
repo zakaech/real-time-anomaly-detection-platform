@@ -52,7 +52,9 @@ export class ContributorChartComponent {
   );
 
   protected readonly config = computed<ChartConfiguration>(() => {
-    const items = [...this.contributors()].sort((a, b) => Math.abs(b.z_score) - Math.abs(a.z_score));
+    const items = [...this.contributors()].sort(
+      (a, b) => Math.abs(b.z_score) - Math.abs(a.z_score),
+    );
     return {
       type: 'bar',
       data: {

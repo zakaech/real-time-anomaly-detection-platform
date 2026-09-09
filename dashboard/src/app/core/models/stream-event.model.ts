@@ -34,8 +34,4 @@ export type StreamEventName = 'alert.created' | 'alert.updated' | 'heartbeat';
  * either cry wolf or hide a real outage.
  */
 export type ConnectionState =
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'disconnected'
-  | 'error';
+  'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';

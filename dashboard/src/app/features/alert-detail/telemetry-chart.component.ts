@@ -30,8 +30,8 @@ import { TimeSeriesChartComponent } from '../../shared/time-series-chart.compone
     @if (series(); as data) {
       @if (data.points.length === 0) {
         <p class="no-data">
-          Aucune fenêtre de télémétrie conservée pour cette période. Les données brutes ne sont
-          pas persistées&nbsp;; seules les fenêtres scorées le sont.
+          Aucune fenêtre de télémétrie conservée pour cette période. Les données brutes ne sont pas
+          persistées&nbsp;; seules les fenêtres scorées le sont.
         </p>
       } @else {
         <div class="signal-picker" role="group" aria-label="Signal affiché">

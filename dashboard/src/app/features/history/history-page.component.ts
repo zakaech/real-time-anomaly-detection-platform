@@ -43,8 +43,8 @@ import { PaginatorComponent } from './paginator.component';
       <header class="page-header">
         <h2>Historique</h2>
         <p class="subtitle">
-          Filtres, tri et pagination exécutés par PostgreSQL&nbsp;: le navigateur ne reçoit
-          qu'une page.
+          Filtres, tri et pagination exécutés par PostgreSQL&nbsp;: le navigateur ne reçoit qu'une
+          page.
         </p>
       </header>
 
@@ -146,8 +146,7 @@ export class HistoryPageComponent {
     this.query.update((current) => ({
       ...current,
       sort: property,
-      direction:
-        current.sort === property && current.direction === 'desc' ? 'asc' : 'desc',
+      direction: current.sort === property && current.direction === 'desc' ? 'asc' : 'desc',
       page: 0,
     }));
   }
