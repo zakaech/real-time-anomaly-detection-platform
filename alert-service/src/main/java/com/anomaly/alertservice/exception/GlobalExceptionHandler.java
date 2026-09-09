@@ -48,6 +48,14 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(MachineNotFoundException.class)
+    ProblemDetail onMachineNotFound(MachineNotFoundException e) {
+        ProblemDetail problem =
+                problem(HttpStatus.NOT_FOUND, "Machine not found", e.getMessage(), "machine-not-found");
+        problem.setProperty("machineCode", e.getMachineCode());
+        return problem;
+    }
+
     @ExceptionHandler(InvalidStateTransitionException.class)
     ProblemDetail onInvalidTransition(InvalidStateTransitionException e) {
         ProblemDetail problem =

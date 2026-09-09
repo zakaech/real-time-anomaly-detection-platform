@@ -4,6 +4,7 @@ import com.anomaly.alertservice.config.AlertServiceProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Consumes the {@code alerts} topic, persists each alert idempotently, and
@@ -19,6 +20,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  */
 @SpringBootApplication
 @EnableConfigurationProperties(AlertServiceProperties.class)
+// Only for the telemetry retention purge (D-41); nothing else is scheduled.
+@EnableScheduling
 public class AlertServiceApplication {
 
     public static void main(String[] args) {
