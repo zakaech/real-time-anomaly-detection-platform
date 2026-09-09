@@ -234,6 +234,44 @@ jobs:
         working-directory: stream-processor
         run: pytest -q tests/test_feature_conformance.py tests/test_model.py tests/test_maturity.py tests/test_alerting.py
 
+  alert-service:
+    name: alert-service (build, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # Testcontainers starts a real PostgreSQL. The runner already provides a
+      # Docker daemon, and the API version the client speaks is pinned in the
+      # pom so the same build works here and on a workstation running a much
+      # newer Docker.
+      - name: Build and test
+        working-directory: alert-service
+        run: mvn -B verify
+
+      # Named separately because each guards an invariant whose failure mode is
+      # silent:
+      #   - idempotency: a replayed alert must not create a second row, and the
+      #     guarantee has to come from PostgreSQL rather than from an if. Phase 3
+      #     measured 8 duplicate deliveries on a real crash, so this is not
+      #     hypothetical.
+      #   - error classification: a transient database failure must be retried
+      #     and a corrupt payload must not, and confusing the two either loses
+      #     valid alerts or blocks a partition forever.
+      #   - contract conformance: the Java dead-letter envelope must match the
+      #     same JSON Schema the Python components emit, or a rejected message
+      #     becomes unreplayable and nobody finds out until they try.
+      - name: Idempotency, error classification and contract conformance
+        if: ${{ !cancelled() }}
+        working-directory: alert-service
+        run: mvn -B test -Dtest='AlertIdempotencyTest,AlertConsumerTest,ContractConformanceTest' -Dsurefire.failIfNoSpecifiedTests=false
+
   contracts:
     name: contracts (JSON Schema validity)
     runs-on: ubuntu-latest

@@ -32,6 +32,28 @@ public class AlertStatisticsService {
         this.acknowledgements = acknowledgements;
     }
 
+    /**
+     * The bucket a native query hands back for date_trunc.
+     *
+     * <p>Which temporal type that is depends on the JDBC driver and the
+     * Hibernate version -- it was a java.sql.Timestamp historically and is an
+     * Instant here. Pinning one of them would make this break on an upgrade for
+     * no reason, so both are accepted and anything else fails loudly.
+     */
+    private static Instant toInstant(Object value) {
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toInstant();
+        }
+        if (value instanceof java.time.OffsetDateTime offset) {
+            return offset.toInstant();
+        }
+        throw new IllegalStateException(
+                "unexpected temporal type from date_trunc: " + value.getClass().getName());
+    }
+
     @Transactional(readOnly = true)
     public AlertStatistics summary(Instant from, Instant to, String granularity, int machineLimit) {
         long total = statistics.countBetween(from, to);
@@ -68,8 +90,7 @@ public class AlertStatisticsService {
                         .map(
                                 row ->
                                         new AlertStatistics.TimeBucket(
-                                                ((java.sql.Timestamp) row[0]).toInstant(),
-                                                ((Number) row[1]).longValue()))
+                                                toInstant(row[0]), ((Number) row[1]).longValue()))
                         .toList();
 
         double acknowledgementRate = total == 0 ? 0.0 : (double) acknowledged / total;
