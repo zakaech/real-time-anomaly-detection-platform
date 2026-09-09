@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.anomaly</groupId>
+  <artifactId>alert-service</artifactId>
+  <version>0.1.0</version>
+  <name>alert-service</name>
+  <description>Consumes the alerts topic, persists idempotently, and serves the operator API</description>
+
+  <properties>
+    <!-- release, not source/target: it also checks that no API newer than 17 is
+         used. The build image is JDK 17, but a developer on JDK 21 would
+         otherwise compile against 21's class library and produce a jar that
+         fails at runtime on 17. -->
+    <java.version>17</java.version>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- 1.21+ is required, not preferred: Docker 29 refuses API versions
+         below 1.40, and the client shaded into 1.20.x negotiates 1.32, so every
+         container start fails with "client version 1.32 is too old". -->
+    <testcontainers.version>1.21.3</testcontainers.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <!-- Flyway owns the schema. Nothing is created from Java, and JPA is set to
+         validate so a drift between entity and migration fails at startup. -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Structured JSON logs, to match the Python components. -->
+    <dependency>
+      <groupId>net.logstash.logback</groupId>
+      <artifactId>logstash-logback-encoder</artifactId>
+      <version>8.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Testcontainers, and only where it is indispensable: the idempotency
+         guarantee is `INSERT ... ON CONFLICT ... RETURNING (xmax = 0)`, which is
+         PostgreSQL. Proving it on H2 would prove something about a database we
+         do not ship. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- The alert contract is a JSON Schema of record. A test replays a real
+         message against it rather than trusting the Java DTO to agree. -->
+    <dependency>
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <version>1.5.3</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <!--
+              Pin the Docker Engine API version the Testcontainers client speaks.
+              Without it docker-java falls back to 1.32, and Docker 29 refuses
+              anything below 1.40 outright ("client version 1.32 is too old").
+              1.43 is the version that satisfies both ends: it is supported from
+              Docker 24 (what CI runners ship) through 29 (what this workstation
+              runs), so the same build works in both places.
+            -->
+            <api.version>1.43</api.version>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

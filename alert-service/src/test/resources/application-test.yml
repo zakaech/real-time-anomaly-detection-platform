@@ -1,0 +1,46 @@
+# Test profile. The datasource is supplied by Testcontainers through
+# @DynamicPropertySource, so nothing here points at a real database.
+spring:
+  kafka:
+    # Overridden by EmbeddedKafka where a broker is needed; harmless elsewhere
+    # because the listener container is disabled below.
+    bootstrap-servers: localhost:9092
+    consumer:
+      auto-offset-reset: earliest
+    listener:
+      # Off by default: only the consumer tests want a running listener, and
+      # every other test class would otherwise sit retrying a broker that is not
+      # there -- turning an unrelated failure into a timeout.
+      auto-startup: false
+      concurrency: 1
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        # Shows the SQL a specification actually produced, which is how a
+        # filter silently executed in Java would be caught.
+        format_sql: false
+
+# The listener is started explicitly by the tests that need it. Leaving it
+# running everywhere would have every test class trying to reach a broker.
+alert-service:
+  kafka:
+    topic-alerts: alerts
+    topic-dlq: telemetry.dlq
+    retry-initial-interval-ms: 50
+    retry-multiplier: 2.0
+    retry-max-interval-ms: 200
+  sse:
+    heartbeat-interval-ms: 60000
+    client-queue-capacity: 64
+    max-replay-events: 100
+  api:
+    default-page-size: 20
+    max-page-size: 100
+
+logging:
+  level:
+    root: WARN
+    com.anomaly.alertservice: INFO
+    org.testcontainers: WARN
