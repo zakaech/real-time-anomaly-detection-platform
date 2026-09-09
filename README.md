@@ -3,11 +3,12 @@
 Plateforme temps réel de détection d'anomalies sur télémétrie de capteurs industriels : ingestion continue,
 enrichissement, scoring par modèle non supervisé, alertes persistées et workflow d'acquittement opérateur.
 
-**État : Phase 3 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
+**État : Phase 4 terminée** — infrastructure (Kafka, PostgreSQL, topics), bibliothèque partagée
 `telemetry-core`, [`event-simulator`](event-simulator/) qui alimente `telemetry.raw` et `telemetry.labels`,
-[`ml-training`](ml-training/) qui entraîne, évalue et sérialise le détecteur, et
+[`ml-training`](ml-training/) qui entraîne, évalue et sérialise le détecteur,
 [`stream-processor`](stream-processor/) qui score le flux en continu et publie `telemetry.scored` et
-`alerts`. Les phases suivantes (service Spring Boot, dashboard Angular) restent à écrire.
+`alerts`, et [`alert-service`](alert-service/) qui persiste les alertes de façon idempotente dans PostgreSQL
+et expose l'API opérateur (REST + SSE). Le dashboard Angular reste à écrire.
 
 ## Pile technique
 
@@ -102,6 +103,23 @@ docker compose --env-file .env -f infra/docker-compose.yml --profile stream run 
 `STREAM_LATE_DETECTION_ENABLED=false` pour un backfill : pendant un rejeu accéléré, chaque échantillon porte
 par construction un retard de publication important, et tout l'historique partirait dans `telemetry.late`.
 
+## Persister et consulter les alertes
+
+Le service Spring Boot démarre avec la pile — c'est un consommateur passif, pas un producteur de données :
+
+```sh
+docker compose --env-file .env -f infra/docker-compose.yml up -d alert-service
+
+curl 'localhost:8081/api/v1/alerts?severity=CRITICAL&size=10' | jq
+curl 'localhost:8081/api/v1/alerts/stats?granularity=hour' | jq
+curl -N localhost:8081/api/v1/alerts/stream
+curl -X POST localhost:8081/api/v1/alerts/{id}/acknowledge   -H 'Content-Type: application/json' -H 'X-Operator: op.martin'   -d '{"comment":"vérifié en atelier"}'
+```
+
+La sémantique est **at-least-once Kafka + idempotence PostgreSQL**, donc *effectively-once* à la persistance.
+Ce n'est pas de l'exactly-once : l'unicité est portée par un `INSERT ... ON CONFLICT ... RETURNING (xmax = 0)`,
+pas par du code Java ([ADR-005](docs/adr/ADR-005-idempotent-persistence.md)).
+
 Les mesures d'exécution réelle sont dans [`docs/10-phase-3-streaming.md`](docs/10-phase-3-streaming.md), avec
 leurs conditions. Ce sont des mesures **locales**, pas un benchmark.
 
@@ -146,13 +164,16 @@ Les décisions structurantes de la Phase 3 ont leur propre ADR :
 | [ADR-002](docs/adr/ADR-002-dead-letter-envelope.md) | contrat de l'enveloppe de rebut, et ce qui n'y va pas |
 | [ADR-003](docs/adr/ADR-003-watermark-and-output-mode.md) | watermark 90 s et mode de sortie `update` |
 | [ADR-004](docs/adr/ADR-004-window-maturity.md) | maturité de fenêtre : ne scorer que ce que le modèle a appris |
+| [ADR-005](docs/adr/ADR-005-idempotent-persistence.md) | idempotence Kafka vers PostgreSQL, garantie par la base |
+| [ADR-006](docs/adr/ADR-006-error-classification.md) | erreurs transitoires, erreurs de données, doublons |
+| [ADR-007](docs/adr/ADR-007-persistence-model.md) | modèle de persistance et clé d'idempotence |
 
 Les contrats de messages font foi dans [`contracts/json-schema/`](contracts/json-schema/), et
 [`contracts/examples/`](contracts/examples/) contient les messages d'exemple rejoués par les tests.
 
 Chaque composant a son propre README : [`libs/telemetry-core/`](libs/telemetry-core/README.md),
 [`event-simulator/`](event-simulator/README.md), [`ml-training/`](ml-training/README.md),
-[`stream-processor/`](stream-processor/README.md).
+[`stream-processor/`](stream-processor/README.md), [`alert-service/`](alert-service/README.md).
 
 ## Sur les chiffres
 

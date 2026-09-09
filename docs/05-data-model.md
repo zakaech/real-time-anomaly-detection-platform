@@ -1,5 +1,15 @@
 # 05 — Modèle relationnel PostgreSQL
 
+> **Mise à jour Phase 4.** Le schéma réellement livré comporte **trois** tables — `machine`, `alert`,
+> `alert_acknowledgement` — et non les six esquissées ici. `model_version` et `drift_metric` n'ont aucun
+> producteur, `production_line` aucun attribut propre, et `criticality` / `commissioned_on` /
+> `nominal_ranges` ne sont alimentées par rien. Les migrations font foi :
+> `alert-service/src/main/resources/db/migration/`. Décision et justification :
+> [D-38](09-open-decisions.md) et [ADR-007](adr/ADR-007-persistence-model.md).
+>
+> Ce qui suit reste la conception d'origine, conservée parce que ses sections 4.1 et 5 — le choix d'un UUID
+> fourni par l'amont, et la requête d'upsert idempotent — sont celles qui ont effectivement été implémentées.
+
 ## 1. Périmètre : ce que la base contient, et ce qu'elle ne contient pas
 
 PostgreSQL est la **source de vérité des alertes et du référentiel**. Il ne stocke **pas** la télémétrie brute.
