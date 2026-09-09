@@ -373,3 +373,48 @@ Une première version ne contrôlait que la **queue** : elle supprimait 93 % des
 **15 alertes sur 15 machines**, toutes sur le même `window_start` avec 44 échantillons — les fenêtres
 d'ouverture, tronquées au **début**. D'où le contrôle symétrique. Détail complet :
 `docs/adr/ADR-004-window-maturity.md` et `docs/10-phase-3-streaming.md` § 5.7.
+
+### D-38 — Trois tables plutôt que six · `ACCEPTÉ`
+
+`docs/05` esquissait six tables. Deux d'entre elles — `model_version` et `drift_metric` — **n'ont aucun
+producteur** en Phase 4, et `production_line` n'a aucun attribut propre : `LINE-A` est un code, rien d'autre.
+
+**Retenu** : `machine` (avec `line_code` en colonne), `alert`, `alert_acknowledgement`. Une table vide est une
+dette qui ressemble à une fonctionnalité.
+
+Écartées aussi : `criticality`, `commissioned_on`, `nominal_ranges`. `fleet.yaml` ne contient que
+`machine_id`, `line_id`, `profile`, `firmware_version`. La description du contrat prétend que la sévérité
+dépend de la criticité de la machine ; c'est faux — `severity_for()` n'utilise que le score et le seuil.
+
+Détail : `docs/adr/ADR-007-persistence-model.md`.
+
+### D-39 — Auto-provisionnement d'une machine inconnue · `ACCEPTÉ`
+
+**Options** : (A) clé étrangère stricte, alerte rejetée en DLQ — (B) créer la machine à la première alerte —
+(C) clé étrangère nullable.
+
+**Retenu : B.** A jette une **détection réelle** parce qu'un seed est périmé : c'est le mauvais mode de panne.
+L'alerte porte `machine_id` et `line_id`, ce qui suffit à créer la ligne. `ON CONFLICT (code) DO NOTHING`,
+parce que trois threads consommateurs peuvent rencontrer la même machine neuve au même instant.
+
+### D-40 — Un seul topic de rebut · `ACCEPTÉ`
+
+**Options** : (A) réutiliser `telemetry.dlq` — (B) un `alerts.dlq` dédié.
+
+**Retenu : A.** L'enveloppe `DlqEnvelope` (ADR-002) porte déjà `source_topic` : elle a été conçue pour être
+partagée. Filtrer sur `source_topic = 'alerts'` distingue les deux producteurs, et il n'y a qu'un endroit à
+surveiller. Le contrat étant défini en Python, l'implémentation Java est vérifiée contre **le même JSON
+Schema** — deux implémentations ne restent alignées que si un tiers les arbitre.
+
+### D-09 — Contrôle de concurrence sur l'acquittement · `ACCEPTÉ`
+
+Arbitré en Phase 4. **`expectedVersion` optionnel** dans le corps de la requête : absent, aucun contrôle ;
+présent, un 409 si l'alerte a bougé entre-temps. Le rendre obligatoire alourdirait un tableau de bord qui agit
+sur des lignes fraîchement chargées ; le supprimer laisserait l'échec silencieux où deux opérateurs agissent,
+un seul compte, et aucun ne l'apprend.
+
+### D-06 — Source du référentiel machines · `ACCEPTÉ`
+
+Arbitré en Phase 4, et différemment de la recommandation initiale (lecture JDBC depuis Spark). Le référentiel
+est **alimenté par le seed Flyway et complété par le flux** (D-39). Le job Spark n'a besoin d'aucun
+référentiel : il ne lit que `machine_id` et `line_id`, qui voyagent déjà sur chaque message.

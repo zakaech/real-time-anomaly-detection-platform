@@ -1,5 +1,12 @@
 # 06 — Contrat REST du alert-service
 
+> **Mise à jour Phase 4.** Livré : `GET /api/v1/alerts`, `GET /api/v1/alerts/{id}`,
+> `POST /api/v1/alerts/{id}/acknowledge`, `GET /api/v1/alerts/stats`, `GET /api/v1/alerts/stream`.
+> Les transitions `resolve` et `dismiss`, l'historique dédié et les endpoints de référentiel ne sont **pas**
+> implémentés : la base les accepte déjà (le CHECK porte les quatre statuts), donc les ajouter ne demandera
+> aucune migration. Le format d'erreur `ProblemDetail` et la justification SSE de la section 2.9 sont
+> implémentés tels quels. Voir [`alert-service/README.md`](../alert-service/README.md).
+
 Base : `/api/v1`. Représentation : `application/json`. Erreurs : `application/problem+json` (RFC 7807).
 Toutes les dates sont en ISO-8601 UTC. Le versionnement est dans le chemin : c'est le plus lisible dans les
 journaux et le plus simple à router, au prix d'un peu de duplication le jour d'une v2.
