@@ -14,3 +14,12 @@ venv
 **/dist
 docs
 .env
+
+# The exported training dataset: 226 MB of parquet that no image copies. It sits
+# in the repository root, which IS the build context for the Python components
+# (they need libs/), so without this line every one of those builds ships a
+# quarter of a gigabyte to the daemon and discards it.
+data
+
+# Generated reports, including PNG figures. Read by humans, never by an image.
+ml-training/reports

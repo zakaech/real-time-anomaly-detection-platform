@@ -113,9 +113,12 @@ artefact is checked against it at startup rather than trusted.
 cd stream-processor && pytest -q     # needs Java 17; see decision D-33
 ```
 
-Tests needing the trained binary skip where it is absent — it is a build output
-and is not committed. The artefact **rejection** tests are written to run
-without it.
+The trained binary **is** committed since D-48, so the three tests that load the
+real artefact run rather than skip — including the one that flips a single byte
+and asserts the job refuses the pickle. They still skip in one legitimate case:
+the component images copy `ml-training/src` but not `artifacts/`, so running the
+suite inside a container without the read-only bind mount finds no binary. The
+artefact **rejection** tests never needed it.
 
 ## Design notes worth defending
 
