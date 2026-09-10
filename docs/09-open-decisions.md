@@ -487,3 +487,46 @@ construit proprement. C'est la version la plus récente réellement compatible a
 
 Conséquence : Angular 21 génère des tests **Vitest + jsdom**, pas Karma/Jasmine. La chaîne fournie est utilisée
 telle quelle.
+
+### D-48 — Distribution de l'artefact ML vers un clone neuf · `ACCEPTÉ` — **Option A**
+
+**Le point bloquant de la Phase 6.** L'objectif « lancement en une commande » était **factuellement faux** :
+`model.joblib` était exclu par `.gitignore`, le `stream-processor` monte `../ml-training/artifacts` en lecture
+seule, et sur un clone neuf le job refusait de démarrer — correctement (ADR-001).
+
+**Options** : (A) versionner les 217 Kio — (B) laisser hors git et échouer proprement — (C) git-lfs —
+(D) release téléchargée au bootstrap.
+
+**Retenu : A.** C'est la seule qui rend l'objectif vrai plutôt qu'approximatif. Le fait décisif est que
+l'artefact **n'est pas reconstructible depuis le dépôt** : le ré-entraîner exige un jeu de 2 591 998 lignes
+lui-même non versionné. C et D exigent toutes deux une étape supplémentaire, donc « pas une commande ».
+
+Le modèle n'a été **ni ré-entraîné, ni recalibré, ni modifié** : le blob git est l'octet pour octet celui du
+disque, et son empreinte correspond à `metadata.json`. L'exception `.gitignore` est nominative — le binaire
+d'`elliptic_envelope` reste ignoré, vérifié par `git check-ignore`. Détail complet dans **ADR-009**.
+
+### D-49 — « Une commande » face aux profils Compose · `ACCEPTÉ` — **Option A**
+
+Les profils `sim` et `stream` datent des Phases 1 et 3 : `docker compose up` laisse la pile **passive**, parce
+que produire des données est un acte délibéré. La Phase 6 demandait un lancement en une commande, ce qui entre
+en tension avec ce choix.
+
+**Retenu : conserver les profils et fournir `make demo`.** La décision antérieure survit — un `up` qui se met
+silencieusement à fabriquer de la télémétrie et à faire tourner un job Spark est une surprise, pas un service —
+et le relecteur n'a bien qu'une seule commande à taper. `make demo` **est** l'acte délibéré, écrit une fois
+plutôt qu'expliqué trois fois.
+
+### D-50 — Documentation OpenAPI · `ACCEPTÉ` — **Option A**
+
+**Options** : (A) springdoc, généré depuis les contrôleurs — (B) `openapi.yaml` écrit à la main.
+
+**Retenu : A.** B diverge du code dès la première modification, et **rien n'échoue quand elle diverge** : c'est
+exactement le mode de panne silencieuse que ce projet combat partout ailleurs.
+
+Renforcé par un test qui compare le document généré à la **table de routage de Spring**, dans les deux sens :
+un chemin documenté mais non routable, ou routable mais non documenté, fait échouer le build.
+
+**Limite énoncée plutôt que masquée** : OpenAPI 3.1 sait déclarer `text/event-stream` comme média et rien de
+plus. Le protocole d'événements (`alert.created`, `alert.updated`, `heartbeat`, `id: event_seq`,
+`Last-Event-ID`) n'a pas de vocabulaire dans la spécification. Il est donc décrit **en prose** dans la
+description de l'opération. Le modéliser par un schéma produirait un document qui valide et qui ment.

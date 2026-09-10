@@ -33,6 +33,15 @@ COPY event-simulator/config event-simulator/config
 COPY event-simulator/tests event-simulator/tests
 COPY libs/telemetry-core/tests libs/telemetry-core/tests
 
+# Unprivileged: it reads a fleet definition and writes to a Kafka socket, and
+# needs nothing that root provides. /workspace is handed over rather than only
+# read, so the editable install and a `pytest` run inside the image both keep
+# working -- a non-root image that cannot run its own tests is a downgrade.
+RUN groupadd --system simulator \
+ && useradd --system --gid simulator --home-dir /workspace simulator \
+ && chown -R simulator:simulator /workspace
+USER simulator
+
 WORKDIR /workspace/event-simulator
 
 # Realtime generation by default. Compose overrides the command for a replay.

@@ -46,8 +46,16 @@ models/**/*.joblib
 Thumbs.db
 desktop.ini
 
-# Training artefacts: the model binary is a build output, reproducible from its
-# seed and its dataset digest. The metadata beside it is small and describes the
-# run, so it stays in the repository.
+# Training artefacts: a model binary is a build output, so it is ignored by
+# default and only the metadata describing the run is kept.
 ml-training/artifacts/**/*.joblib
+
+# One exception, deliberate (D-48, ADR-009). The artefact the streaming job
+# loads at startup is the ONE file the platform cannot start without, and it is
+# not rebuildable on a fresh clone: retraining needs a two-day dataset that is
+# itself not committed. Keeping it out would mean "clone, then train for
+# several minutes, then launch" -- and would silently break the one-command
+# demonstration. 217 kB, whose SHA-256 is recorded in the metadata beside it and
+# re-verified at every startup.
+!ml-training/artifacts/one_class_svm/2.0.0/model.joblib
 data/

@@ -126,6 +126,23 @@ alert-service:
     retention-initial-delay-ms: 60000
     retention-interval-ms: 3600000
 
+# OpenAPI, generated from the controllers (D-50). Served on the service port,
+# not through the dashboard: nginx proxies only /api, and putting an API console
+# on the operator origin should be a decision, not a side effect of a proxy rule.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    # The schema list collapsed by default: the page is read to find an
+    # endpoint, and twenty expanded models push the operations off screen.
+    doc-expansion: none
+  # The actuator is operational plumbing, not part of the operator API.
+  # Documenting it would advertise endpoints no client should call.
+  show-actuator: false
+
 management:
   endpoints:
     web:

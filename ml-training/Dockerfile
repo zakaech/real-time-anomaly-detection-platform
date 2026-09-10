@@ -4,6 +4,17 @@
 # libs/telemetry-core and validates against contracts/.
 #
 #   docker build -f ml-training/Dockerfile -t ml-training .
+#
+# This one stays root, unlike event-simulator and stream-processor. It is a
+# toolchain image, run with the repository bind-mounted from the host
+# (`-v "$PWD":/workspace`), and it writes back into that mount: training
+# artefacts, reports, and the ruff/mypy/pytest caches. A container user whose
+# uid does not match the host owner cannot write there, so dropping root would
+# break the image at its actual job. Nothing here is exposed to a network.
+#
+# Not multi-stage either, and for a reason that can be checked rather than
+# asserted: there is no build stage to discard. No compiler or -dev package is
+# installed, so a runtime stage would copy everything the first stage held.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

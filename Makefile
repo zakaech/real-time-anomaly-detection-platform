@@ -11,8 +11,8 @@ CORE_IMAGE := telemetry-core-dev
 CORE_RUN := docker run --rm -v "$(CURDIR)":/workspace -w /workspace/libs/telemetry-core $(CORE_IMAGE)
 
 .DEFAULT_GOAL := help
-.PHONY: help env up up-tools down clean topics describe logs ps psql \
-        build-core check lint format typecheck test test-contracts
+.PHONY: help env demo bootstrap check-env up up-tools down clean topics describe \
+        logs ps psql build-core check lint format typecheck test test-contracts
 
 help: ## Show the available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -25,6 +25,24 @@ help: ## Show the available targets
 env: ## Create .env from the template if it does not exist
 	@if [ -f .env ]; then echo ".env already exists, leaving it alone"; \
 	else cp .env.example .env && echo ".env created from .env.example"; fi
+
+# ---------------------------------------------------------------------------
+# Demonstration
+#
+# `demo` is the single command the README gives a reviewer. It exists because
+# the simulator and the Spark job stay behind compose profiles (D-49): plain
+# `up` leaves the stack passive, since producing data is a deliberate act. This
+# target IS that deliberate act, wrapped once instead of explained three times.
+# ---------------------------------------------------------------------------
+
+demo: ## Build, start everything and produce real data (the one command)
+	./scripts/demo.sh
+
+bootstrap: ## Verify the platform: artefact, topics, migrations, readiness
+	./scripts/bootstrap.sh
+
+check-env: ## Fail if .env.example and the compose file disagree
+	python scripts/check_env_example.py
 
 up: env ## Start Kafka and PostgreSQL, then create the topics
 	$(COMPOSE) up -d
