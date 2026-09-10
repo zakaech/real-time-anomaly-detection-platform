@@ -60,10 +60,15 @@ suggérait une seconde ligne de défense qui n'existait pas. Elle a été retir�
 
 - L'image du job de streaming dépend de `ml-training` (D-35). Dépendance de sérialisation, non
   d'architecture : elle disparaîtrait avec un format d'export neutre, au prix d'une conversion à valider.
-- Le binaire n'est pas versionné dans Git (sortie de build) ; seules ses métadonnées le sont. Les tests qui en
-  ont besoin s'abstiennent proprement en CI, et les quatre tests de rejet sont écrits pour s'exécuter **sans**
-  lui — la vérification lisant les métadonnées avant de dépickler, un fichier factice suffit à atteindre chaque
+- ~~Le binaire n'est pas versionné dans Git (sortie de build) ; seules ses métadonnées le sont.~~
+  **Révisé en Phase 6 — voir ADR-009.** Le binaire du modèle retenu **est** désormais versionné : sans lui, un
+  clone neuf ne pouvait pas démarrer, et il n'est pas reconstructible depuis le dépôt puisque le jeu de données
+  qui l'a produit ne l'est pas non plus. Conséquence directe : les tests qui chargent l'artefact réel
+  **s'exécutent** au lieu de s'abstenir. Les quatre tests de rejet restent écrits pour s'exécuter **sans** lui —
+  la vérification lisant les métadonnées avant de dépickler, un fichier factice suffit à atteindre chaque
   contrôle.
+  **Ce que la présente ADR conserve intégralement** : la vérification au démarrage. Versionner l'artefact ne
+  remplace aucun contrôle, cela déplace seulement la façon dont il arrive sur la machine.
 - Changer de modèle impose de reconstruire l'image ou de remonter le volume d'artefacts. C'est voulu :
   l'artefact est immuable une fois publié.
 

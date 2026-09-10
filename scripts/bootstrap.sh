@@ -22,6 +22,17 @@
 
 set -eu
 
+# Git Bash rewrites any argument that looks like a Unix absolute path into a
+# Windows one before handing it to a native .exe. So
+#   docker compose exec kafka /opt/kafka/bin/kafka-topics.sh
+# reaches docker.exe as C:/Program Files/Git/opt/kafka/bin/kafka-topics.sh and
+# the command silently finds nothing -- which this script would then report as
+# "broker unreachable", blaming the platform for a quoting problem on the host.
+# Both variables are inert on Linux and in CI.
+MSYS_NO_PATHCONV=1
+MSYS2_ARG_CONV_EXCL='*'
+export MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 REPO_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$REPO_ROOT"
 
@@ -229,46 +240,51 @@ check_topics() {
 
   bootstrap=$(env_value KAFKA_INTERNAL_BOOTSTRAP kafka:9092)
 
-  # variable-name expected-partitions default-topic-name
-  topics="KAFKA_TOPIC_TELEMETRY_RAW:6:telemetry.raw
-KAFKA_TOPIC_TELEMETRY_SCORED:6:telemetry.scored
-KAFKA_TOPIC_ALERTS:3:alerts
-KAFKA_TOPIC_TELEMETRY_LABELS:3:telemetry.labels
-KAFKA_TOPIC_TELEMETRY_DLQ:1:telemetry.dlq
-KAFKA_TOPIC_TELEMETRY_LATE:1:telemetry.late"
-
-  printf '%s\n' "$topics" | while IFS=':' read -r var expected default; do
-    [ -z "$var" ] && continue
+  # A plain `for` over "variable:partitions:default" entries, deliberately not a
+  # `while read` over a pipe. Two reasons, both learned by running this:
+  #
+  #   * the loop body calls `docker compose exec`, which READS STDIN. Inside a
+  #     `while read` fed by a pipe, the first call swallows the remaining lines
+  #     and the loop checks one topic instead of six -- while reporting success.
+  #   * a piped loop runs in a subshell, so every FAILURES increment inside it
+  #     is discarded when that subshell exits.
+  #
+  # A `for` has neither problem, and `</dev/null` on the exec makes the first
+  # one impossible to reintroduce.
+  for entry in \
+    "KAFKA_TOPIC_TELEMETRY_RAW:6:telemetry.raw" \
+    "KAFKA_TOPIC_TELEMETRY_SCORED:6:telemetry.scored" \
+    "KAFKA_TOPIC_ALERTS:3:alerts" \
+    "KAFKA_TOPIC_TELEMETRY_LABELS:3:telemetry.labels" \
+    "KAFKA_TOPIC_TELEMETRY_DLQ:1:telemetry.dlq" \
+    "KAFKA_TOPIC_TELEMETRY_LATE:1:telemetry.late"
+  do
+    var=${entry%%:*}
+    rest=${entry#*:}
+    expected=${rest%%:*}
+    default=${rest#*:}
     topic=$(env_value "$var" "$default")
 
     described=$(compose exec -T kafka /opt/kafka/bin/kafka-topics.sh \
-      --bootstrap-server "$bootstrap" --describe --topic "$topic" 2>/dev/null | tr -d '\r' || true)
+      --bootstrap-server "$bootstrap" --describe --topic "$topic" \
+      </dev/null 2>/dev/null | tr -d '\r' || true)
 
     if [ -z "$described" ]; then
-      printf '  FAIL  topic %s ABSENT\n' "$topic"
-      printf '        kafka-init aurait du le creer. Relancez :  make topics\n'
-      printf 'TOPIC_FAILURE\n' >> "$TOPIC_FAIL_FILE"
+      fail "topic $topic ABSENT"
+      info "kafka-init aurait du le creer. Relancez :  make topics"
       continue
     fi
 
-    partitions=$(printf '%s' "$described" | sed -n 's/.*PartitionCount:[[:space:]]*\([0-9]*\).*/\1/p' | head -n 1)
+    partitions=$(printf '%s' "$described" \
+      | sed -n 's/.*PartitionCount:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)
     if [ "$partitions" = "$expected" ]; then
-      printf '  OK    %s  partitions=%s\n' "$topic" "$partitions"
+      ok "$topic  partitions=$partitions"
     else
-      printf '  FAIL  %s  partitions=%s (attendu %s)\n' "$topic" "$partitions" "$expected"
-      printf '        Kafka ne peut pas REDUIRE un nombre de partitions.\n'
-      printf '        Si la valeur est trop haute :  make clean  puis  make up\n'
-      printf 'TOPIC_FAILURE\n' >> "$TOPIC_FAIL_FILE"
+      fail "$topic  partitions=${partitions:-inconnu} (attendu $expected)"
+      info "Kafka ne peut pas REDUIRE un nombre de partitions."
+      info "Si la valeur est trop haute :  make clean  puis  make up"
     fi
   done
-
-  # The loop above runs in a subshell (it is the right-hand side of a pipe), so
-  # a FAILURES increment inside it would be discarded when the subshell exits.
-  # The file is how the count crosses that boundary.
-  if [ -s "$TOPIC_FAIL_FILE" ]; then
-    count=$(wc -l < "$TOPIC_FAIL_FILE" | tr -d ' ')
-    FAILURES=$((FAILURES + count))
-  fi
 }
 
 # ===========================================================================
@@ -325,8 +341,14 @@ check_flyway() {
   db=$(env_value POSTGRES_DB anomaly)
   user=$(env_value POSTGRES_USER anomaly)
 
+  # `success::text`, not bare `success`. The `t` / `f` shown by psql is its
+  # DISPLAY form for a boolean column; concatenated into a string, PostgreSQL
+  # renders the same value as `true` / `false`. Comparing against `t` therefore
+  # reports every applied migration as failed -- which is exactly what this
+  # script did on its first real run, against a database that was perfectly fine.
   history=$(compose exec -T postgres psql -U "$user" -d "$db" -tAc \
-    "SELECT version || '|' || success FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank" 2>/dev/null | tr -d '\r' || true)
+    "SELECT version || '|' || success::text FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank" \
+    </dev/null 2>/dev/null | tr -d '\r' || true)
 
   if [ -z "$history" ]; then
     fail "flyway_schema_history vide ou absente"
@@ -336,9 +358,10 @@ check_flyway() {
 
   for expected_version in 1 2 3; do
     line=$(printf '%s\n' "$history" | grep "^${expected_version}|" || true)
+    status=${line#*|}
     if [ -z "$line" ]; then
       fail "migration V${expected_version} non appliquee"
-    elif [ "${line#*|}" = "t" ]; then
+    elif [ "$status" = "true" ] || [ "$status" = "t" ]; then
       ok "V${expected_version} appliquee"
     else
       fail "V${expected_version} appliquee mais EN ECHEC (success=false)"
@@ -387,9 +410,6 @@ main() {
     info "Demarrez Docker Desktop, puis relancez."
     exit 1
   fi
-
-  TOPIC_FAIL_FILE=$(mktemp)
-  trap 'rm -f "$TOPIC_FAIL_FILE"' EXIT INT TERM
 
   check_kafka
   check_topics

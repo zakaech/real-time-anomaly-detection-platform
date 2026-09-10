@@ -24,6 +24,12 @@
 #
 # Re-runnable. Step 4 adds two more hours of history; steps 2, 5 and 6 converge
 # on an already-running container instead of duplicating it.
+#
+# One caveat worth knowing on a SECOND run: Spark resumes from its checkpoint,
+# so it scores only what arrived after the offsets it already committed. That is
+# the recovery guarantee working as designed, not a fault -- but it means a
+# re-run does not rescore history it has already seen. For a genuinely clean
+# demonstration, `make clean` first: it drops the volumes, checkpoint included.
 
 set -eu
 
@@ -105,7 +111,23 @@ note "Rejeu termine en ${replay_elapsed}s reels."
 # Started AFTER the replay so its first micro-batches read a topic that already
 # holds history. STREAM_STARTING_OFFSETS=earliest means it scores all of it.
 say "5/7  Demarrage du job de scoring Spark"
-compose --profile stream up -d stream-processor
+note "Detection des retards DESACTIVEE pour cette execution, deliberement."
+note "Le retard vaut 'ingest_time - event_time' : le temps qu'un producteur a"
+note "garde un echantillon avant de le publier. En rejeu, le producteur publie"
+note "maintenant des evenements vieux de deux heures, donc presque tout le"
+note "backfill est declare en retard -- et le scoring ne lit QUE les messages a"
+note "l'heure. Mesure d'un essai avec la detection active : 107 055 messages"
+note "sur 108 359 routes vers telemetry.late, 0 fenetre scoree, 0 alerte."
+note "Contrepartie assumee : pendant la demo, un evenement reellement en retard"
+note "n'est pas signale. Le canal telemetry.late est verifie separement en"
+note "Phase 3 (docs/10 section 5.5)."
+
+# Exported for compose interpolation: the shell environment takes precedence
+# over --env-file, so this overrides the .env value without editing the file.
+STREAM_LATE_DETECTION_ENABLED=false \
+  compose --profile stream up -d stream-processor
+
+note ""
 note "Spark verifie le SHA-256 du modele au demarrage et refuse de scorer si"
 note "l'artefact ne correspond pas (ADR-001)."
 

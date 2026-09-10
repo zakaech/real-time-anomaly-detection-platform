@@ -444,15 +444,22 @@ Le détail complet est dans [`docs/adr/`](docs/adr/) et
 
 ### Prérequis
 
-Docker Desktop (moteur Linux) et `make`. Rien d'autre : aucun JDK, aucun Python,
-aucun Node n'est nécessaire sur la machine — tout est construit en conteneur.
+**Docker Desktop avec le moteur Linux, et un shell POSIX** (Git Bash convient
+sous Windows). Rien d'autre : aucun JDK, aucun Python, aucun Node n'est
+nécessaire sur la machine — tout est construit en conteneur.
+
+`make` est **facultatif**, et ce n'est pas une précaution de style : il n'est
+pas installé par défaut sous Windows, et il ne l'était pas sur la machine où ce
+projet a été développé. Chaque cible se résume donc à une seule ligne
+directement exécutable, donnée à côté de la commande `make` partout ci-dessous.
 
 ### Préparation
 
 ```sh
 git clone <url-du-depot>
 cd real-time-anomaly-detection-platform
-make env          # crée .env depuis .env.example
+
+make env          # ou :  cp .env.example .env
 ```
 
 `.env` contient uniquement des valeurs de développement. `POSTGRES_PASSWORD` est
@@ -463,7 +470,7 @@ compromise pour toujours, l'historique étant immuable.
 ### Démarrage
 
 ```sh
-make demo
+make demo         # ou :  ./scripts/demo.sh
 ```
 
 Une seule commande, à partir d'un clone propre. La première exécution construit
@@ -471,14 +478,18 @@ quatre images.
 
 ### Les autres commandes
 
-```sh
-make bootstrap    # vérifie artefact, topics, migrations, readiness
-make up           # démarre la pile PASSIVE (sans production de données)
-make down         # arrête, conserve les volumes
-make clean        # arrête ET supprime les volumes
-make check-env    # vérifie que .env.example et compose s'accordent
-make help         # toutes les cibles
-```
+| `make` | Équivalent direct | Effet |
+|---|---|---|
+| `make demo` | `./scripts/demo.sh` | Tout construire, démarrer, produire des données |
+| `make bootstrap` | `./scripts/bootstrap.sh` | Vérifier artefact, topics, migrations, readiness |
+| `make up` | `docker compose --env-file .env -f infra/docker-compose.yml up -d` | Démarrer la pile **passive** |
+| `make down` | `… down` | Arrêter, conserver les volumes |
+| `make clean` | `… down -v` | Arrêter **et supprimer** les volumes |
+| `make check-env` | `python scripts/check_env_example.py` | Vérifier `.env.example` contre compose |
+| `make help` | — | Lister toutes les cibles |
+
+`./scripts/bootstrap.sh --model-only` vérifie le seul artefact, sans démarrer
+Docker : c'est la vérification la plus rapide qu'un clone est complet.
 
 **Pourquoi `make demo` et pas `docker compose up`** : le simulateur et le job
 Spark sont derrière des profils Compose, décidé en Phase 1 et conservé en Phase 6
@@ -530,14 +541,22 @@ La marche à suivre pour les produire est dans
 
 ## 17. Tests et qualité
 
-| Composant | Portes |
-|---|---|
-| Python (×4) | `ruff check`, `ruff format --check`, `mypy --strict`, `pytest` |
-| `alert-service` | `mvn verify` — **63 tests**, dont Testcontainers PostgreSQL |
-| `dashboard` | Prettier, Vitest + jsdom, build de production |
-| `contracts` | Validité JSON Schema Draft 2020-12 |
-| `infra` | Résolution Compose, `shellcheck`, cohérence `.env.example` |
-| `images` | Les six Dockerfiles construisent, les images durcies tournent non-root |
+Comptages relevés lors de l'exécution réelle des suites, pas de mémoire :
+
+| Composant | Tests | Portes |
+|---|---|---|
+| `libs/telemetry-core` | **166** | ruff, format, mypy `--strict`, pytest |
+| `event-simulator` | **140** | ruff, format, mypy `--strict`, pytest |
+| `ml-training` | **73** | ruff, format, mypy `--strict`, pytest |
+| `stream-processor` | **97** | ruff, format, mypy `--strict`, pytest |
+| `alert-service` | **63** | `mvn verify`, Testcontainers PostgreSQL |
+| `dashboard` | **29** | Prettier, Vitest + jsdom, build de production |
+| **Total** | **568** | |
+
+S'y ajoutent, sans compteur de tests : validité JSON Schema Draft 2020-12 des
+contrats, résolution du fichier Compose, `shellcheck` sur les quatre scripts
+shell, cohérence de `.env.example` avec Compose, construction des images et
+vérification qu'elles tournent réellement non-root.
 
 Testcontainers est utilisé là où il est indispensable : la garantie d'idempotence
 est `ON CONFLICT … RETURNING (xmax = 0)`, du PostgreSQL. La prouver sur H2

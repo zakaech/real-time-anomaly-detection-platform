@@ -1,0 +1,11 @@
+# This component builds from its OWN context (infra/docker-compose.yml sets
+# `context: ../alert-service`), and Docker reads .dockerignore from the context
+# root -- so the repository-root .dockerignore does NOT apply here. Without this
+# file the 74 MB of build output in target/ is uploaded to the daemon on every
+# build and then never used: the Dockerfile copies pom.xml and src/, and builds
+# inside the container precisely so the artefact does not depend on the host.
+target
+
+# Never bake a real environment file into an image.
+.env
+*.log
