@@ -226,9 +226,10 @@ jobs:
       #   - alerting: the deduplication rules that stop one incident becoming
       #     hundreds of alerts, including the timeout-behind-watermark case that
       #     killed a real recovery run.
-      # The trained binary is a build output and is not committed, so the tests
-      # that need it skip here and run locally; the verification rejections are
-      # written to run without it.
+      # Since D-48 the artefact IS committed, so the three tests that load the
+      # real binary now run here rather than skipping -- including the one that
+      # flips a single byte and asserts the job refuses the pickle. The
+      # rejection tests were always written to run without it.
       - name: Feature conformance, artefact verification, maturity and alert deduplication
         if: ${{ !cancelled() }}
         working-directory: stream-processor
@@ -271,6 +272,18 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: alert-service
         run: mvn -B test -Dtest='AlertIdempotencyTest,AlertConsumerTest,ContractConformanceTest' -Dsurefire.failIfNoSpecifiedTests=false
+
+      # Named separately because it guards the one failure mode documentation
+      # has: describing something the code does not do. The test compares the
+      # generated OpenAPI document against Spring's own routing table, in both
+      # directions -- a documented path that is not routable, or a routable path
+      # left undocumented, fails the build. That is the reason springdoc was
+      # chosen over a hand-written openapi.yaml (decision D-50): a file nobody
+      # can forget to update.
+      - name: OpenAPI matches the routes that actually exist
+        if: ${{ !cancelled() }}
+        working-directory: alert-service
+        run: mvn -B test -Dtest='OpenApiDocumentationTest' -Dsurefire.failIfNoSpecifiedTests=false
 
   dashboard:
     name: dashboard (lint, tests, build)
@@ -363,7 +376,52 @@ jobs:
         # catches a variable added to compose but forgotten in .env.example.
         run: docker compose --env-file .env -f infra/docker-compose.yml config --quiet
 
-      - name: Shellcheck the topic creation script
+      # A variable declared in the template and interpolated by nothing reads
+      # like configuration, gets edited, and changes nothing. Phase 6 found two
+      # of them; one (POSTGRES_PORT) was worse than dead, because the JDBC URL
+      # had the port written into it, so editing the variable looked like it
+      # should work and silently did not. This makes that class of drift a build
+      # failure rather than an archaeology exercise.
+      - name: .env.example and compose agree on every variable
+        if: ${{ !cancelled() }}
+        run: python scripts/check_env_example.py
+
+      - name: Shellcheck every shell script
+        if: ${{ !cancelled() }}
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           shellcheck --shell=sh infra/kafka/create-topics.sh
+          shellcheck --shell=sh scripts/bootstrap.sh scripts/demo.sh
+          shellcheck --shell=sh dashboard/docker-entrypoint.sh
+
+  images:
+    name: images (every Dockerfile builds)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env from the committed template
+        run: cp .env.example .env
+
+      # Phase 6 dropped root in three images and added a HEALTHCHECK to a
+      # fourth. Those changes fail at BUILD or at START, not in any unit test:
+      # an nginx that cannot write its pid file, or a Spark job whose Ivy cache
+      # landed in an unreadable /root, is a green test suite and a dead
+      # container. Building here is what catches it.
+      - name: Build every image
+        run: docker compose --env-file .env -f infra/docker-compose.yml build
+
+      # Building proves the Dockerfile is valid; it does not prove the image
+      # runs as the user it declares. This does.
+      - name: The hardened images really run unprivileged
+        run: |
+          set -eu
+          for image in dashboard event-simulator stream-processor alert-service; do
+            full="anomaly-platform/$image:dev"
+            user=$(docker image inspect "$full" --format '{{.Config.User}}')
+            if [ -z "$user" ]; then
+              echo "FAIL $image runs as root: no USER directive took effect"
+              exit 1
+            fi
+            echo "ok   $image runs as $user"
+          done

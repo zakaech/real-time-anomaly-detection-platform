@@ -10,6 +10,13 @@
 # Python 3.11 rather than the interpreter that happens to be installed locally:
 # it is the version PySpark 3.5 supports, and the one CI runs, so a check that
 # passes here passes there.
+#
+# Root, deliberately: the usage above bind-mounts the repository from the host
+# and the tools write into it (ruff, mypy and pytest caches). A container user
+# whose uid does not match the host owner cannot write there, so dropping root
+# would break the only thing this image does. It serves nothing and listens on
+# no port. The application images (event-simulator, stream-processor) do drop
+# root, because they run unattended and touch the network.
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

@@ -33,6 +33,16 @@ USER alert
 
 EXPOSE 8080
 
+# The readiness probe, not liveness. It reports DOWN while Flyway is still
+# migrating, so an orchestrator that waits on this container waits for a schema
+# that is actually there -- "started" is not "ready".
+#
+# Declared in the image and not only in compose: an image that cannot say
+# whether it is working is incomplete, and compose is not the only thing that
+# will ever run it.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=40s --retries=12 \
+  CMD wget -q -O - http://127.0.0.1:8080/actuator/health/readiness | grep -q UP || exit 1
+
 # Container-aware heap sizing rather than a fixed -Xmx: the JVM reads the cgroup
 # limit, so the same image behaves correctly whatever memory compose grants it.
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"

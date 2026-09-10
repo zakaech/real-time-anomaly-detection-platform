@@ -25,6 +25,21 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker-entrypoint.sh /docker-entrypoint.d/99-runtime-config.sh
 RUN chmod +x /docker-entrypoint.d/99-runtime-config.sh
 
+# Everything nginx writes to, handed to the user that will run it. Each path is
+# here because dropping root without it makes the container fail to start:
+#
+#   /var/cache/nginx      proxy and temp buffers, opened at startup
+#   /var/run/nginx.pid    the master writes its pid before forking a worker
+#   .../html/assets       the runtime config the entrypoint rewrites on boot
+#
+# The listener is already on 8080, so no capability to bind a privileged port
+# is needed -- which is what makes dropping root possible at all here.
+RUN mkdir -p /var/cache/nginx /usr/share/nginx/html/assets \
+ && touch /var/run/nginx.pid \
+ && chown -R dashboard:dashboard /var/cache/nginx /var/run/nginx.pid /usr/share/nginx/html
+
+USER dashboard
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \

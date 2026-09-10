@@ -112,8 +112,15 @@ def samples() -> pd.DataFrame:
 @pytest.fixture(scope="session")
 def artifact_dir() -> Path:
     if not (ARTIFACT_DIR / "model.joblib").is_file():
+        # Since D-48 the artefact IS committed, so a checkout has it and these
+        # tests run. The skip remains for the one case that is still legitimate:
+        # the component images copy `ml-training/src` but not `artifacts/`, so
+        # running the suite inside a container without the read-only bind mount
+        # finds no binary. Skipping is right there; failing would report a
+        # missing volume as a broken model.
         pytest.skip(
-            "trained artefact not present; run ml-training first "
-            "(the binary is a build output and is not committed)"
+            f"no artefact at {ARTIFACT_DIR}. It is committed (D-48), so this "
+            "means the suite is running somewhere the repository tree is not "
+            "mounted -- inside a component image, mount ml-training/artifacts."
         )
     return ARTIFACT_DIR

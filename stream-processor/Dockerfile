@@ -37,6 +37,26 @@ COPY stream-processor/pyproject.toml stream-processor/README.md stream-processor
 COPY stream-processor/src stream-processor/src
 RUN pip install --no-cache-dir -e "stream-processor[dev]"
 
+COPY contracts contracts
+COPY stream-processor/tests stream-processor/tests
+
+# Unprivileged -- and the user is created BEFORE the Ivy cache is warmed just
+# below. That order is load-bearing, not tidiness: Spark resolves jars under
+# ${user.home}/.ivy2, so warming the cache as root would leave it in /root,
+# unreadable by the runtime user. The job would then try to reach Maven at
+# startup and fail on a machine with no network -- the exact dependency this
+# warm-up exists to remove.
+#
+# /checkpoints is created here so the named volume mounted over it inherits
+# this ownership. Without it Docker creates the mount point root-owned and the
+# job cannot checkpoint, which voids the recovery guarantee of docs/04.
+RUN groupadd --system spark \
+ && useradd --system --gid spark --home-dir /home/spark --create-home spark \
+ && mkdir -p /checkpoints \
+ && chown -R spark:spark /workspace /home/spark /checkpoints
+ENV HOME=/home/spark
+USER spark
+
 # Resolve the Kafka connector at build time so a run never depends on Maven
 # being reachable. The jars land in the Ivy cache that Spark reads at startup.
 ENV SPARK_KAFKA_PACKAGE="org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3"
@@ -47,9 +67,6 @@ s = (SparkSession.builder.appName('warm-ivy').master('local[1]') \
      .config('spark.jars.packages', os.environ['SPARK_KAFKA_PACKAGE']) \
      .config('spark.ui.enabled','false').getOrCreate()); \
 print('ivy cache warmed'); s.stop()"
-
-COPY contracts contracts
-COPY stream-processor/tests stream-processor/tests
 
 WORKDIR /workspace/stream-processor
 

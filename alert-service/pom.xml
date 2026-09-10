@@ -76,6 +76,16 @@
       <version>8.0</version>
     </dependency>
 
+    <!-- OpenAPI generated FROM the controllers, not written by hand (D-50).
+         A hand-maintained openapi.yaml diverges from the code on the first
+         change and nothing fails when it does; this cannot describe an endpoint
+         that does not exist. 2.6.0 is the line built for Spring Boot 3.3.x. -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>2.6.0</version>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
