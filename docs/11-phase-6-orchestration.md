@@ -374,6 +374,29 @@ Le flux a continué de tourner pendant les vérifications suivantes ; les
 compteurs augmentent donc d'une mesure à l'autre, ce qui est le comportement
 attendu d'une plateforme en marche.
 
+### Réexécuté sur un second clone, après commit des correctifs
+
+Les trois défauts de §4 et celui de §4.4 ont été corrigés puis **committés**. Un
+**second clone**, pris du commit contenant ces correctifs, volumes de nouveau
+supprimés, a rejoué la séquence entière :
+
+```
+Plateforme prete en 295s.
+  alertes persistees          : 1
+  fenetres de telemetrie      : 1833
+DEMO EXIT=0
+```
+
+C'est cette exécution qui fait foi : elle part d'un clone de l'état versionné,
+sans aucun fichier copié à la main. Rejeu de 7 200 s simulées en **59 s réels**,
+`telemetry.late` à **0**, `artifact_verified` avec l'empreinte attendue.
+
+Vérifications rejouées sur ce clone : dashboard, REST, `/v3/api-docs`,
+Swagger UI et `/stats` répondent tous **200** ; SSE délivre `alert.created` et
+`heartbeat` avec leurs curseurs `id:` ; l'acquittement fait **200 puis 409**
+(`invalid-state-transition`, avec `traceId`) ; `GET /api/v1/machines/M-010/telemetry`
+rend 351 points dont 16 anomalies et 95 fenêtres non scorées conservées.
+
 ### Les 17 points de vérification
 
 | # | Vérification | Preuve observée |

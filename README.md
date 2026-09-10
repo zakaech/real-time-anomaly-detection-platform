@@ -511,6 +511,18 @@ et à faire tourner un job Spark est une surprise, pas un service rendu.
 6. démarrage du simulateur en temps réel, pour que le flux continue ;
 7. attente des premières alertes, puis affichage des URL.
 
+**Une particularité assumée de l'étape 5.** Le job démarre avec la détection des
+retards **désactivée**, et le script le dit à l'écran plutôt que de le faire
+discrètement. La raison est mesurée : le retard vaut `ingest_time - event_time`,
+c'est-à-dire le temps qu'un producteur a gardé un échantillon avant de le
+publier. En rejeu, le simulateur publie *maintenant* des événements vieux de deux
+heures, donc presque tout le backfill est déclaré en retard — et le scoring ne
+lit que les messages à l'heure. Avec la détection active, un essai a mesuré
+**107 055 messages sur 108 359 routés vers `telemetry.late`, 0 fenêtre scorée et
+0 alerte**, sans la moindre erreur dans les journaux. La contrepartie : pendant
+la démonstration, un événement réellement en retard n'est pas signalé. Ce canal
+est vérifié séparément (§18).
+
 | Adresse | Quoi |
 |---|---|
 | `http://localhost:4200` | Dashboard |
@@ -524,9 +536,11 @@ conclure à un dysfonctionnement.
 
 ## 16. Captures d'écran
 
-**Aucune capture n'est actuellement présente dans le dépôt.** Les liens
-ci-dessous sont donc cassés, délibérément : un lien cassé se voit et se corrige,
-alors qu'une capture fabriquée donne une impression de preuve sans en être une.
+**Aucune capture n'est actuellement présente dans le dépôt.** Les fichiers
+ci-dessous sont donc *attendus*, pas fournis — ils sont listés comme chemins et
+non intégrés comme images, pour que cette section n'affiche pas cinq cadres
+vides. Une absence annoncée se voit et se corrige ; une capture fabriquée donne
+une impression de preuve sans en être une.
 
 | Vue | Fichier attendu |
 |---|---|
@@ -572,17 +586,24 @@ correspondance OpenAPI ↔ routes.
 Ces mesures sont **locales** : une machine, un broker, `local[2]`. **Ce n'est
 pas un benchmark**, et aucune ne doit être lue comme une capacité de traitement.
 
-### Backfill (2 h simulées rejouées)
+### Backfill (4 h simulées rejouées), avant et après la correction D-37
 
-| | |
-|---|---|
-| Messages `telemetry.raw` | 215 997 |
-| Fenêtres distinctes | 21 690 |
-| Fenêtres scorées | 18 331 |
-| Fenêtres anormales (après correction D-37) | 330 |
-| Alertes / identifiants distincts | 189 / 181 |
-| Livraisons dupliquées | 8 |
-| DLQ / late | 0 / 0 |
+Le rejeu a été **refait intégralement** après la correction, avec `SIGKILL` et
+redémarrage, pour vérifier que la nouvelle règle ne casse rien.
+
+| | Avant D-37 | Après D-37 |
+|---|---|---|
+| Messages `telemetry.raw` | 215 997 | 215 997 |
+| **Fenêtres distinctes** | **21 690** | **21 690** |
+| Messages `telemetry.scored` | 22 581 | 23 647 |
+| Fenêtres scorées | 18 331 | 18 834 |
+| Fenêtres anormales | 746 | **330** |
+| Identifiants d'alerte distincts | 181 | **45** |
+| DLQ / late | 0 / 0 | 0 / 0 |
+
+**Les 21 690 fenêtres distinctes sont identiques de part et d'autre**, et c'est
+l'invariant qui compte : la correction ne perd aucune fenêtre, elle change
+seulement lesquelles reçoivent un score.
 
 ### Temps réel
 
