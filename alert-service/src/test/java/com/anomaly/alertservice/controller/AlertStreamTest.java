@@ -1,7 +1,10 @@
 package com.anomaly.alertservice.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,9 +14,12 @@ import com.anomaly.alertservice.dto.AcknowledgeRequest;
 import com.anomaly.alertservice.service.AlertBroadcaster;
 import com.anomaly.alertservice.service.AlertIngestionService;
 import com.anomaly.alertservice.service.AlertLifecycleService;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +29,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * The live stream, exercised over HTTP.
@@ -187,6 +194,92 @@ class AlertStreamTest extends PostgresTestBase {
         String received = body(stream);
         assertThat(received).contains("event:alert.updated");
         assertThat(received).contains("ACKNOWLEDGED");
+    }
+
+    /**
+     * A peer exactly as Tomcat leaves one after the browser has gone: every
+     * write fails with an IOException, and the farewell itself --
+     * {@code completeWithError} -- throws, because the container refuses any
+     * further use of an async request it has already declared failed. This is
+     * the state a dashboard leaves behind each time it navigates away from
+     * /live, and MockMvc cannot produce it, so it is modelled.
+     */
+    private static final class DeadEmitter extends SseEmitter {
+        final AtomicInteger writes = new AtomicInteger();
+        final AtomicInteger farewells = new AtomicInteger();
+
+        DeadEmitter() {
+            super(0L);
+        }
+
+        @Override
+        public void send(SseEventBuilder builder) throws IOException {
+            writes.incrementAndGet();
+            throw new IOException("ServletOutputStream failed to flush: Broken pipe");
+        }
+
+        @Override
+        public synchronized void completeWithError(Throwable ex) {
+            farewells.incrementAndGet();
+            throw new IllegalStateException(
+                    "A non-container (application) thread attempted to use the AsyncContext"
+                            + " after an error had occurred");
+        }
+    }
+
+    @Test
+    @DisplayName("a dead client cannot fail an acknowledgement, is evicted, and does not stop the heartbeat")
+    void deadSubscriberCannotFailTheOperator() throws Exception {
+        ingestion.ingest(AlertMessages.valid());
+        int before = broadcaster.connectedClients();
+
+        // One ghost, one healthy browser, in that order: the ghost is hit first
+        // on every fan-out, which is what made the real incident deterministic.
+        DeadEmitter ghost = new DeadEmitter();
+        broadcaster.subscribe(ghost, Set.of(), null, null);
+        MvcResult healthy = openStream("");
+        assertThat(broadcaster.connectedClients()).isEqualTo(before + 2);
+
+        // The operator's path, over HTTP -- the request that answered 500 on the
+        // running stack while the log said "alert_acknowledged".
+        mvc.perform(
+                        post("/api/v1/alerts/{id}/acknowledge", AlertMessages.REAL_ALERT_ID)
+                                .header("X-Operator", "op.martin")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"comment\":\"seen\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACKNOWLEDGED"));
+
+        // Committed, not rolled back: the row and its audit trail both exist.
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT status FROM alert WHERE id = ?",
+                                String.class,
+                                UUID.fromString(AlertMessages.REAL_ALERT_ID)))
+                .isEqualTo("ACKNOWLEDGED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM alert_acknowledgement", Integer.class))
+                .isEqualTo(1);
+
+        // The ghost was tried once, evicted, and never tried again; the healthy
+        // client still received the update.
+        assertThat(ghost.writes.get()).isEqualTo(1);
+        assertThat(ghost.farewells.get()).isEqualTo(1);
+        assertThat(broadcaster.connectedClients()).isEqualTo(before + 1);
+        assertThat(body(healthy)).contains("event:alert.updated");
+
+        // The heartbeat: a second ghost, and one tick. The tick must not throw,
+        // because a ScheduledExecutorService cancels every later run of a task
+        // that does -- which is how the heartbeat went silent for good.
+        DeadEmitter secondGhost = new DeadEmitter();
+        broadcaster.subscribe(secondGhost, Set.of(), null, null);
+        assertThatCode(broadcaster::heartbeat).doesNotThrowAnyException();
+        assertThat(secondGhost.writes.get()).isEqualTo(1);
+        assertThat(broadcaster.connectedClients()).isEqualTo(before + 1);
+
+        // And the next tick still reaches the client that is alive.
+        broadcaster.heartbeat();
+        assertThat(secondGhost.writes.get()).isEqualTo(1);
+        assertThat(countOccurrences(body(healthy), "event:heartbeat")).isGreaterThanOrEqualTo(2);
     }
 
     private static int countOccurrences(String haystack, String needle) {
