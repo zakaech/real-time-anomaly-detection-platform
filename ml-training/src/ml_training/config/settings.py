@@ -1,4 +1,4 @@
-"""Training settings, and the split boundaries that decide what is honest.
+"""Training settings, and the split boundaries the evaluation depends on.
 
 The split fractions live here rather than being passed around, because they are
 the single most consequential choice in the component: get them wrong and every

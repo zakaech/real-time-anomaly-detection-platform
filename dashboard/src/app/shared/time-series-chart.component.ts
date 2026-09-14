@@ -37,11 +37,10 @@ import 'chartjs-adapter-date-fns';
  * Angular major versions.
  *
  * Only the pieces actually used are registered, so the bundle carries the line,
- * scatter and bar controllers and nothing else. The list is load-bearing, not a
- * convenience: Chart.js 4 is tree-shakable, and a chart type left out of it does
- * not degrade -- it throws `"<type>" is not a registered controller` at
- * construction and leaves an empty canvas. That is exactly what happened to the
- * contributor chart (a `bar` chart) when only line and scatter were registered.
+ * scatter and bar controllers and nothing else. Chart.js 4 is tree-shakable,
+ * and a chart type left out of this list does not degrade: it throws
+ * `"<type>" is not a registered controller` at construction and leaves an
+ * empty canvas.
  */
 Chart.register(
   LineController,

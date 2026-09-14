@@ -31,7 +31,7 @@ import org.springframework.util.backoff.ExponentialBackOff;
  *       class: the upsert absorbs it and the listener acknowledges normally.
  * </ul>
  *
- * <p>The asymmetry is the point. Retrying forever on a database outage is
+ * <p>The asymmetry is intended. Retrying forever on a database outage is
  * correct; retrying forever on a corrupt payload is a poison-pill loop that
  * blocks the partition behind it.
  */

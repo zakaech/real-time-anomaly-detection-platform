@@ -1,6 +1,6 @@
 """Enumerations shared by every message contract.
 
-Two decoding policies coexist here on purpose, and the asymmetry is the point:
+Two decoding policies coexist here on purpose:
 
 * **Tolerant** (:class:`MachineState`, :class:`AnomalyType`): decoded with an
   ``UNKNOWN`` fallback. The schema evolution rule in
@@ -83,8 +83,8 @@ class _TolerantWireEnum(WireEnum):
 class MachineState(_TolerantWireEnum):
     """Operational state of a machine at sampling time.
 
-    Load-bearing for detection quality, not descriptive metadata: high vibration
-    during ``STARTING`` is normal, the same reading while ``RUNNING`` is not.
+    It matters for detection, not only as metadata: high vibration during
+    ``STARTING`` is normal, the same reading while ``RUNNING`` is not.
     Only ``RUNNING`` windows are scored (docs/07-ml-methodology.md section 2.2).
     """
 

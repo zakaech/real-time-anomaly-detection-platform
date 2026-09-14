@@ -31,8 +31,7 @@ public abstract class PostgresTestBase {
                     .withDatabaseName("anomaly")
                     .withUsername("anomaly")
                     .withPassword("test-only-not-a-secret")
-                    // Same collation as the compose service, so ORDER BY behaves
-                    // identically here and in the deployed database.
+                    // Durability is irrelevant in a throwaway test database.
                     .withCommand("postgres", "-c", "fsync=off");
 
     static {

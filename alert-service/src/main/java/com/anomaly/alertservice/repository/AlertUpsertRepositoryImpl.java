@@ -12,8 +12,8 @@ import org.springframework.stereotype.Repository;
 /**
  * The single statement that makes at-least-once delivery survivable.
  *
- * <p>Three details of it are load-bearing, and each replaces an approach that
- * looks equivalent and is not:
+ * <p>Three details of it matter, and each replaces an approach that looks
+ * equivalent and is not:
  *
  * <ol>
  *   <li><strong>{@code ON CONFLICT (id) DO UPDATE}</strong> rather than a

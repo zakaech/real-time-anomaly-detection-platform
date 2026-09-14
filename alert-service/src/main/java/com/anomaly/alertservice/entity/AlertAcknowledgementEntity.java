@@ -19,7 +19,7 @@ import java.util.UUID;
  * acknowledgement would destroy the only record that it happened.
  *
  * <p>The table already accepts RESOLVED and DISMISSED, so extending the
- * lifecycle beyond Phase 4 needs no migration.
+ * lifecycle needs no migration.
  */
 @Entity
 @Table(name = "alert_acknowledgement")

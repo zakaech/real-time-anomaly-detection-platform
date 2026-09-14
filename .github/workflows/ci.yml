@@ -153,7 +153,7 @@ jobs:
         run: pytest -q
 
       # Named separately: the feature conformance test is what lets the Spark
-      # job in Phase 3 claim the same semantics, and the leakage tests guard the
+      # job claim the same semantics, and the leakage tests guard the
       # failure that produces excellent metrics and a worthless model.
       - name: Feature conformance and label leakage
         if: ${{ !cancelled() }}
@@ -259,8 +259,8 @@ jobs:
       # Named separately because each guards an invariant whose failure mode is
       # silent:
       #   - idempotency: a replayed alert must not create a second row, and the
-      #     guarantee has to come from PostgreSQL rather than from an if. Phase 3
-      #     measured 8 duplicate deliveries on a real crash, so this is not
+      #     guarantee has to come from PostgreSQL rather than from an if. A crash
+      #     test measured 8 duplicate deliveries (docs/10), so this is not
       #     hypothetical.
       #   - error classification: a transient database failure must be retried
       #     and a corrupt payload must not, and confusing the two either loses
@@ -377,11 +377,8 @@ jobs:
         run: docker compose --env-file .env -f infra/docker-compose.yml config --quiet
 
       # A variable declared in the template and interpolated by nothing reads
-      # like configuration, gets edited, and changes nothing. Phase 6 found two
-      # of them; one (POSTGRES_PORT) was worse than dead, because the JDBC URL
-      # had the port written into it, so editing the variable looked like it
-      # should work and silently did not. This makes that class of drift a build
-      # failure rather than an archaeology exercise.
+      # like configuration, gets edited, and changes nothing. This makes that
+      # class of drift a build failure.
       - name: .env.example and compose agree on every variable
         if: ${{ !cancelled() }}
         run: python scripts/check_env_example.py
@@ -403,11 +400,10 @@ jobs:
       - name: Create .env from the committed template
         run: cp .env.example .env
 
-      # Phase 6 dropped root in three images and added a HEALTHCHECK to a
-      # fourth. Those changes fail at BUILD or at START, not in any unit test:
-      # an nginx that cannot write its pid file, or a Spark job whose Ivy cache
-      # landed in an unreadable /root, is a green test suite and a dead
-      # container. Building here is what catches it.
+      # Three images run unprivileged and one declares a HEALTHCHECK. Those
+      # properties fail at BUILD or at START, not in any unit test: an nginx
+      # that cannot write its pid file, or a Spark job whose Ivy cache landed
+      # in an unreadable /root, is a green test suite and a dead container.
       - name: Build every image
         run: docker compose --env-file .env -f infra/docker-compose.yml build
 

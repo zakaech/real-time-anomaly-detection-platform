@@ -24,12 +24,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /**
  * Live alert stream, over Server-Sent Events.
  *
- * <p>SSE rather than WebSocket (decision D-08), and the reason is not fashion.
- * The need is strictly one-way: the server pushes, and the client acts through
- * REST. A WebSocket would add an upstream channel nobody uses, and its
- * reconnection logic would have to be written by hand -- whereas EventSource
- * reconnects on its own and replays Last-Event-ID, which matters for a shop
- * floor dashboard left open for hours on a flaky network.
+ * <p>SSE rather than WebSocket (decision D-08). The need is strictly one-way:
+ * the server pushes, and the client acts through REST. A WebSocket would add
+ * an upstream channel nobody uses, and its reconnection logic would have to
+ * be written by hand, whereas EventSource reconnects on its own and replays
+ * Last-Event-ID, which matters for a shop floor dashboard left open for hours
+ * on a flaky network.
  *
  * <p>Filtering happens on the server. Filtering in the browser would mean
  * shipping the whole stream to every client and discarding most of it there.

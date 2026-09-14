@@ -7,8 +7,8 @@ and a live run measured partial windows being flagged anomalous **100 % of the
 time** (383 of 383 with 30-39 samples) against **1.0 %** for complete ones --
 producing 16 CRITICAL alerts for 15 machines in five minutes.
 
-The rule under test is event-time coverage, not the watermark. Those are
-different things and the distinction is the whole point of the fix:
+The rule under test is event-time coverage, not the watermark. The two are
+different things:
 
 * the **watermark** is one stream-wide lateness bound, derived from the newest
   event time across every machine, and it governs state eviction;

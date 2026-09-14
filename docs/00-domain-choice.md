@@ -6,7 +6,7 @@
 
 ## Recommandation : télémétrie industrielle (maintenance prédictive)
 
-Je recommande de **garder le domaine industriel** et d'écarter le flux de transactions bancaires.
+Recommandation : **garder le domaine industriel** et écarter le flux de transactions bancaires.
 Les deux sont défendables, mais un seul est cohérent avec la stack imposée. Voici le raisonnement.
 
 ### 1. La contrainte décisive : l'architecture doit correspondre au SLA du domaine
@@ -35,7 +35,7 @@ anormale ». Un détecteur non supervisé (Isolation Forest, enveloppe robuste) 
 En fraude, les étiquettes existent — les impayés et les contestations remontent avec quelques jours de délai —
 et l'industrie utilise du **supervisé** (gradient boosting) avec des règles. Choisir Isolation Forest sur des
 transactions expose à une critique immédiate : *« pourquoi ne pas apprendre sur les étiquettes que vous avez ? »*.
-La question « comment évalue-t-on sans étiquettes ? » que tu veux traiter devient artificielle.
+La question « comment évalue-t-on sans étiquettes ? » que le projet veut traiter devient artificielle.
 
 ### 3. Les signaux se prêtent aux fenêtres glissantes
 
@@ -77,9 +77,9 @@ Il faut être honnête sur le coût de ce choix :
 
 Faible et borné. Seuls changent : `event-simulator`, le module `features`, le contenu du contrat de données et
 le libellé métier des tables. Kafka, la sémantique de streaming, le service Spring, le dashboard et toute la
-partie MLOps sont identiques. Si tu veux basculer, c'est ~20 % du code.
+partie MLOps sont identiques. Basculer représenterait ~20 % du code.
 
-**Décision proposée : domaine industriel. Elle t'appartient — voir D-01 dans `docs/09-open-decisions.md`.**
+**Décision proposée : domaine industriel — voir D-01 dans `docs/09-open-decisions.md`.**
 
 ## Cadrage fonctionnel retenu
 

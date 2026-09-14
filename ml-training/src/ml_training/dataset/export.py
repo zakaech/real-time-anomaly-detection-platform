@@ -268,7 +268,7 @@ def export_dataset(
         )
 
     # At-least-once delivery means the same sample can arrive twice. Removing
-    # duplicates here rather than downstream keeps sample_count honest, which
+    # duplicates here rather than downstream keeps sample_count exact, which
     # every windowed mean depends on.
     before = len(samples)
     samples = samples.drop_duplicates(subset=["event_id"], keep="first")

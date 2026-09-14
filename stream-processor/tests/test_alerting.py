@@ -5,9 +5,9 @@ state object. All three are simple enough to fake, so the logic is tested
 without starting a streaming query -- which keeps these tests in milliseconds
 and makes the failures readable.
 
-The cases the brief asks for are all here: repeated updates of one window must
-count once, a continuous run must yield one alert, and two runs separated by
-more than the gap must yield two.
+The cases covered: repeated updates of one window must count once, a
+continuous run must yield one alert, and two runs separated by more than the
+gap must yield two.
 """
 
 from __future__ import annotations
@@ -295,8 +295,8 @@ class TestModelProvenance:
     model.artifact_sha256 -- the Spark schema declares both -- but the alerting
     projection selected only name and version, so every published alert had them
     null. artifact_sha256 is the proof that the model which scored a window is
-    the binary evaluated in Phase 2; without it an alert cannot be tied back to
-    an artefact months later, which is the whole reason the field exists.
+    the binary evaluated offline; without it an alert cannot be tied back to
+    an artefact months later.
     """
 
     @staticmethod

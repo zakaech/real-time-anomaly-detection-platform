@@ -15,9 +15,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Gives every request a trace id, in the log lines and in the error response.
  *
- * <p>This is what turns a screenshot of a failed request into the log line that
- * explains it. Without it, an operator reporting "it said something went wrong"
- * leaves nothing to search on.
+ * <p>Without it, an operator reporting "it said something went wrong" leaves
+ * nothing to search on in the logs.
  *
  * <p>An inbound {@code X-Trace-Id} is honoured so a trace started elsewhere is
  * not broken here; otherwise one is generated.

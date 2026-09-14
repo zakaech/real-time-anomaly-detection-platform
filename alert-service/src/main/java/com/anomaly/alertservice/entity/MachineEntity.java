@@ -13,7 +13,7 @@ import java.time.Instant;
  *
  * <p>The columns are only those something actually produces: {@code code} and
  * {@code lineCode} come from the alert contract, {@code machineType} from the
- * simulator roster via the Flyway seed. The Phase 0 sketch also proposed
+ * simulator roster via the Flyway seed. The initial design also proposed
  * criticality, a commissioning date and nominal ranges; nothing emits them, and
  * criticality in particular is described in the contract as feeding severity
  * while the stream-processor computes severity from score and threshold alone.

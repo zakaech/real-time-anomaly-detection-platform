@@ -4,13 +4,10 @@
 #   make demo
 #
 # Why this exists rather than `docker compose up` doing everything: the
-# simulator and the Spark job sit behind compose profiles, decided in Phase 1
-# and kept in Phase 6 (D-49). `up` leaves the stack passive, because GENERATING
-# DATA IS A DELIBERATE ACT -- a plain `up` that silently starts fabricating
-# telemetry and burning CPU on a Spark job is a surprise, not a convenience.
-#
-# So the profiles stay, and this script is the deliberate act. It is one
-# command for the reviewer and an explicit one for everyone else.
+# simulator and the Spark job sit behind compose profiles (D-49). `up` leaves
+# the stack passive, because generating data is a deliberate act; a plain `up`
+# that starts fabricating telemetry and running a Spark job would be a
+# surprise. This script is that deliberate act, as one command.
 #
 # What it does, in order:
 #
@@ -25,11 +22,10 @@
 # Re-runnable. Step 4 adds two more hours of history; steps 2, 5 and 6 converge
 # on an already-running container instead of duplicating it.
 #
-# One caveat worth knowing on a SECOND run: Spark resumes from its checkpoint,
-# so it scores only what arrived after the offsets it already committed. That is
-# the recovery guarantee working as designed, not a fault -- but it means a
-# re-run does not rescore history it has already seen. For a genuinely clean
-# demonstration, `make clean` first: it drops the volumes, checkpoint included.
+# On a second run Spark resumes from its checkpoint and scores only what arrived
+# after the offsets it already committed, so history it has already seen is not
+# rescored. For a clean demonstration, `make clean` first: it drops the volumes,
+# checkpoint included.
 
 set -eu
 

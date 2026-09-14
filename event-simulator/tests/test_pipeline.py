@@ -177,8 +177,8 @@ class TestRunModes:
     def test_replay_event_times_are_historical(
         self, fleet: FleetConfig, topics: KafkaTopics
     ) -> None:
-        """A backfill carries a large, honest source lag: the samples are old,
-        the publication is now."""
+        """A backfill carries a large source lag: the samples are old, the
+        publication is now."""
         wall = FakeWallClock(RUN_START)
         replay_start = RUN_START - timedelta(days=7)
         clock = make_clock(start=replay_start, speed_factor=None, wall_clock=wall)

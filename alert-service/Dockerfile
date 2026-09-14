@@ -15,9 +15,8 @@ COPY pom.xml .
 RUN mvn -B -q dependency:go-offline
 
 COPY src src
-# Tests are not run here. They need a Docker daemon for Testcontainers, which is
-# not available inside a build container, and running them in CI where a daemon
-# does exist is the honest place for them.
+# Tests are not run here: they need a Docker daemon for Testcontainers, which is
+# not available inside a build container. CI runs them.
 RUN mvn -B -q -DskipTests package
 
 FROM eclipse-temurin:17-jre-jammy

@@ -22,8 +22,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <p>The property that matters most here is the same one as for alerts, for the
  * same reason: {@code telemetry.scored} is published in <strong>update
- * mode</strong>, so one window arrives repeatedly as it fills -- 5.67 emissions
- * per window on a live run, measured in Phase 3. Without an upsert keyed on the
+ * mode</strong>, so one window arrives repeatedly as it fills (5.67 emissions
+ * per window measured on a live run, docs/10). Without an upsert keyed on the
  * window, the chart would hold five copies of every point.
  */
 class TelemetryWindowTest extends PostgresTestBase {

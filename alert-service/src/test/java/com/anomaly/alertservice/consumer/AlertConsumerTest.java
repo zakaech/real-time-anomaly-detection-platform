@@ -28,7 +28,7 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.kafka.support.Acknowledgment;
 
 /**
- * The consumer sorts failures into three kinds, and the sorting is the point.
+ * The consumer sorts failures into three kinds.
  *
  * <ul>
  *   <li>a <strong>data</strong> error can never succeed, so retrying it is a

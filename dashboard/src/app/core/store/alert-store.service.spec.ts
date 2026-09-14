@@ -12,7 +12,7 @@ import { AlertStoreService } from './alert-store.service';
 /**
  * Deduplication is the property this file exists for.
  *
- * Phase 3 measured 8 duplicate alert deliveries on a real crash, and the SSE
+ * A crash test measured 8 duplicate alert deliveries (docs/10), and the SSE
  * channel replays up to 500 events on reconnection. A feed that appended rows
  * would show the same alert several times and its counters would drift and
  * never recover.

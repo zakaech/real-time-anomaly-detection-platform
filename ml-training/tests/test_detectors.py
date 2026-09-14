@@ -123,9 +123,9 @@ class TestCollinearity:
 
         ``range = max - min`` is an exact linear combination, so the covariance
         is rank-deficient. scikit-learn does **not** raise on it -- it warns and
-        proceeds -- which is worse than failing: the model loads, scores, and
-        rests on a matrix at the edge of float64 precision. Excluding the range
-        columns is a deliberate precaution, not a workaround for a crash.
+        proceeds, so the model loads, scores, and rests on a matrix at the edge
+        of float64 precision. Excluding the range columns is a precaution, not a
+        workaround for a crash.
         """
         rng = np.random.default_rng(5)
         minimum = rng.normal(size=(300, 1))
@@ -142,8 +142,8 @@ class TestCollinearity:
         assert diagnostics["covariance_condition"] < 1e6
         assert np.isfinite(detector.score_samples(collinear)).all()
 
-        # Left to itself, scikit-learn would have accepted the singular matrix
-        # rather than refusing it -- which is the reason for the guard.
+        # Left to itself, scikit-learn accepts the singular matrix; that is what
+        # the guard exists for.
         from sklearn.covariance import EllipticEnvelope
 
         unguarded = EllipticEnvelope(contamination=0.05, random_state=0).fit(collinear)

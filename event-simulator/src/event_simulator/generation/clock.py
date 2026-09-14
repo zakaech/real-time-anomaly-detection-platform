@@ -3,7 +3,7 @@
 Two distinct notions live here, and confusing them is the classic mistake:
 
 * **event time** -- when a sample was measured. It goes into ``event_time`` and
-  is what Phase 3 will window on.
+  is what the streaming job windows on.
 * **wall-clock time** -- when the process actually publishes. It goes into
   ``ingest_time``.
 
@@ -123,8 +123,7 @@ class SimulationClock:
         """Event time starts in the past and advances faster than the wall clock.
 
         ``ingest_time`` remains the real instant of publication, so replayed
-        samples carry a large and perfectly honest source lag: that is what a
-        backfill genuinely looks like.
+        samples carry a large source lag, as a real backfill does.
         """
         return cls(
             start=start,

@@ -4,8 +4,8 @@ Nothing in this platform reads ``os.environ`` directly. Every component builds a
 settings object here, and a missing or malformed value raises before the first
 message is processed.
 
-That timing is the whole point. A component that starts with a partial
-configuration and fails on the first message fails in production, under load,
+That timing matters. A component that starts with a partial configuration and
+fails on the first message fails in production, under load,
 with a stack trace pointing at the message rather than at the deployment. One
 that refuses to start fails in the deployment pipeline, where it is cheap.
 

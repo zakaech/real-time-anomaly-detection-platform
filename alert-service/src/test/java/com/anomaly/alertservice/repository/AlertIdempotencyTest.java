@@ -23,12 +23,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * The guarantee the whole phase rests on, proved against a real PostgreSQL.
+ * The guarantee the service rests on, proved against a real PostgreSQL.
  *
- * <p>The scenario is not hypothetical. Phase 3 crash-tested the stream processor
- * and measured <strong>8 duplicate alert deliveries</strong> on one run and 0 on
- * another: at-least-once makes replays possible, not certain, so the database
- * has to absorb them whenever they happen.
+ * <p>The scenario is not hypothetical: a crash test of the stream processor
+ * measured <strong>8 duplicate alert deliveries</strong> on one run and 0 on
+ * another (docs/10). At-least-once makes replays possible, not certain, so the
+ * database has to absorb them whenever they happen.
  *
  * <p>What is asserted here is that <em>PostgreSQL</em> enforces this, not Java.
  * None of these tests would pass if the uniqueness came from an {@code if}.

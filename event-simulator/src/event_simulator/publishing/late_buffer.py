@@ -15,8 +15,8 @@ Two shapes, and the second is the one that matters:
   produces a run of samples that are all far behind the stream's high-water
   mark and arrive out of order within a single partition.
 
-Phase 3 will need both to justify a watermark value rather than guess one; this
-module only produces the data, it makes no windowing decision.
+This module only produces the data; the windowing decision belongs to the
+streaming job.
 """
 
 from __future__ import annotations
@@ -122,8 +122,8 @@ class LateBuffer:
         """Pop every sample whose release instant has passed.
 
         Released in release order, which for a burst means the machine's samples
-        come out grouped and behind the stream's current position -- the shape
-        Phase 3 has to cope with.
+        come out grouped and behind the stream's current position, which is the
+        shape the watermark has to absorb.
         """
         released: list[GeneratedSample] = []
         while self._heap and self._heap[0].release_at <= now:

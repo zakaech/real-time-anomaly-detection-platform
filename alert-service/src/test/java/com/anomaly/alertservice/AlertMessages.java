@@ -12,8 +12,8 @@ import java.util.UUID;
 /**
  * Alert fixtures.
  *
- * <p>The values are taken from a message actually read back from the topic
- * during the Phase 3 runs, rather than invented: the same UUIDv5, the same score
+ * <p>The values are taken from a message actually read back from the topic,
+ * rather than invented: the same UUIDv5, the same score
  * above the same threshold, the same three contributors. A fixture that does not
  * resemble production traffic tests the test.
  */

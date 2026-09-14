@@ -3,7 +3,7 @@
 Nothing here has a default that hides an environment: broker addresses come from
 ``telemetry_core.config.KafkaSettings``, which has no default on purpose. What
 does default is the shape of the computation -- window, slide, watermark -- and
-those defaults are the values Phase 2 actually trained and evaluated with. A
+those defaults are the values the model was trained and evaluated with. A
 mismatch between them and the artefact would produce a model scoring a
 distribution it never saw, so they are asserted against the artefact at startup
 rather than trusted.
@@ -46,7 +46,7 @@ class StreamSettings(BaseSettings):
     window_seconds: int = Field(default=60, gt=0)
     slide_seconds: int = Field(default=10, gt=0)
 
-    #: 90 s, not the 30 s of the Phase 0 design (decision D-36 / ADR-003).
+    #: 90 s, not the 30 s of the initial design (decision D-36 / ADR-003).
     #: The simulator buffers a machine for 20-75 s during an outage and adds up
     #: to 9 s of jitter, so the configured worst case is about 84 s. A 30 s
     #: watermark would drop exactly the data that was generated to exercise this

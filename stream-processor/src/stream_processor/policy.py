@@ -13,8 +13,8 @@ alert's identifier really is the deterministic derivation.
 
 The loop is affordable because the volume is windows, not samples: fifteen
 machines at one window per ten seconds is ninety rows a minute. It would stop
-being affordable at a few thousand windows per batch, and that is the point at
-which this would need to become a vectorised encoder.
+being affordable at a few thousand windows per batch, at which point this
+would need to become a vectorised encoder.
 """
 
 from __future__ import annotations
@@ -97,12 +97,10 @@ def window_is_mature(
         tail_gap  = window_end - last
         mature    = max(head_gap, tail_gap) <= mean_step * tolerance_steps
 
-    Checking only the tail is not enough, and that was measured rather than
-    reasoned: a tail-only rule still scored every machine's opening windows,
-    which are truncated at the *head* because the stream simply began part-way
-    through them. All fifteen machines then alerted on the same window start
-    with the same 44 samples -- one synchronised false storm at every cold
-    start, which is the worst possible moment for one.
+    Checking only the tail is not enough: a tail-only rule still scores every
+    machine's opening windows, which are truncated at the *head* because the
+    stream began part-way through them, and every machine then alerts on the
+    same window start at every cold start (ADR-004).
 
     Deriving the cadence from the window instead of configuring it is what makes
     this work across machines that sample at different rates: at 1 Hz a complete
@@ -111,13 +109,10 @@ def window_is_mature(
     the fast machine or reject complete ones from the slow machine, and a
     threshold in samples would need the rate the job does not know.
 
-    Two properties this buys, both of which a watermark-based rule loses:
-
-    * it is a **pure function of the window's aggregates**, so a replay produces
-      exactly the same decisions regardless of how batches happen to be cut --
-      the same determinism the feature-parity work exists to protect;
-    * it is **monotone in arrival**: late data can only ever complete a window's
-      tail, so maturity is granted and never revoked.
+    The rule is a pure function of the window's aggregates, so a replay produces
+    the same decisions regardless of how batches are cut, and it is monotone in
+    arrival: late data can only complete a window's tail, so maturity is granted
+    and never revoked.
     """
     if sample_count < 2 or first_event_epoch is None or last_event_epoch is None:
         # One sample spans no interval, so there is no cadence to measure and
@@ -132,8 +127,8 @@ def window_is_mature(
     mean_step = span / (sample_count - 1)
     head_gap = first_event_epoch - window_start_epoch
     tail_gap = window_end_epoch - last_event_epoch
-    # Negative gaps cannot happen (the window bounds its own samples), but
-    # clamping keeps the comparison honest if one ever did.
+    # Negative gaps cannot happen (the window bounds its own samples); the
+    # clamp guards the comparison if one ever did.
     worst_gap = max(head_gap, tail_gap, 0.0)
     return worst_gap <= mean_step * tolerance_steps
 
@@ -150,10 +145,9 @@ def admission_skip_reason(
     The same gate the training pipeline applied. A window the model would never
     have seen in training must not be scored in production either.
 
-    The last-state check is an addition measured in Phase 2: 42 of 221 false
-    positives fell on windows that were more than 90 % RUNNING but *ended* in
-    MAINTENANCE. Whether it actually helps is measured, not asserted -- the
-    result is reported in docs/10.
+    The last-state check exists because false positives were found on windows
+    that were more than 90 % RUNNING but *ended* in MAINTENANCE (docs/07); its
+    measured effect is reported in docs/10.
 
     The maturity check is the correction of D-37, and it exists because the
     other two were not enough. ``sample_count`` counts rows without asking where
@@ -193,8 +187,7 @@ def top_contributors(
 ) -> tuple[FeatureContribution, ...]:
     """The features furthest from the training reference, largest first.
 
-    This is what turns "score 0.995" into something an operator can act on. A
-    non-finite contribution is dropped rather than ranked: it means the feature
+    A non-finite contribution is dropped rather than ranked: it means the feature
     could not be computed, which is reported through ``null_ratio`` instead.
     """
     finite = np.isfinite(contributions)

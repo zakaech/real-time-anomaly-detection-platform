@@ -33,7 +33,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * A client that connects after an alert was raised will not receive it here --
  * it sees it in the list, which is the normal initial load.
  *
- * <p>Two properties are load-bearing:
+ * <p>Two properties matter:
  *
  * <ul>
  *   <li>It reacts <strong>after commit</strong>. Emitting inside the transaction
@@ -53,11 +53,10 @@ public class AlertBroadcaster {
 
     /**
      * An operator changed one alert. Raised inside the transaction, delivered
-     * after it commits -- the same shape as {@link AlertCreatedEvent}, and for
-     * the same reason, plus one learned the hard way: broadcasting from inside
-     * the operator's transaction let a dead browser connection roll back a
-     * committed-looking acknowledgement and answer 500. The display channel
-     * must never be able to undo an operator action.
+     * after it commits, the same shape as {@link AlertCreatedEvent}. Broadcasting
+     * from inside the transaction would let a dead client connection roll back
+     * the acknowledgement: the display channel must never be able to undo an
+     * operator action.
      */
     public record AlertUpdatedEvent(UUID alertId) {}
 
@@ -117,11 +116,9 @@ public class AlertBroadcaster {
     /**
      * Register a client on a caller-supplied emitter.
      *
-     * <p>This seam exists for one test. A peer whose connection the container
-     * has already declared dead cannot be manufactured through MockMvc, and
-     * that peer is exactly the case that once turned an acknowledgement into a
-     * 500 and silenced the heartbeat. Production always goes through the
-     * three-argument overload.
+     * <p>This seam exists for one test: a peer whose connection the container
+     * has already declared dead cannot be manufactured through MockMvc.
+     * Production always goes through the three-argument overload.
      */
     public SseEmitter subscribe(
             SseEmitter emitter, Set<AlertSeverity> severities, String lineCode, Long lastEventId) {
@@ -210,19 +207,15 @@ public class AlertBroadcaster {
     /**
      * Drop a peer that can no longer be written to.
      *
-     * <p>The order is the point. The map entry goes <strong>first</strong>, so
-     * whatever happens next the peer is never tried again -- and it was the
-     * retrying that hurt: every later broadcast and every heartbeat walked into
-     * the same dead connection.
+     * <p>The map entry is removed <strong>first</strong>, so whatever happens
+     * next the peer is never tried again by a later broadcast or heartbeat.
      *
      * <p>Then {@code completeWithError}, guarded. On Tomcat, once the container
      * has already declared the async request failed, touching it again throws
      * {@code IllegalStateException} ("a non-container thread attempted to use
-     * the AsyncContext after an error had occurred"). Observed on the running
-     * stack: that exception escaped from here into the operator's
-     * acknowledgement, rolled back its transaction and answered 500; thrown
-     * from the heartbeat thread it silently cancelled every later tick. A peer
-     * the container has given up on needs no farewell from us.
+     * the AsyncContext after an error had occurred"). Unguarded, that exception
+     * propagates into whatever triggered the broadcast, and from the heartbeat
+     * thread it cancels every later tick.
      */
     private void evict(String id, Subscriber subscriber, Exception cause) {
         remove(id);

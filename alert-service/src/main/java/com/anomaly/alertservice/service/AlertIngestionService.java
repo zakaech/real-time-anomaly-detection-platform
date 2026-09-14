@@ -34,9 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
  *       alert, which the upsert absorbs.
  * </ul>
  *
- * <p>Idempotence is therefore not a nicety here, it is the price of the ordering
- * that does not lose data. Phase 3's crash test produced 8 duplicate alert
- * deliveries on one run and 0 on another, so replays are real and intermittent.
+ * <p>Idempotence is therefore the price of the ordering that does not lose
+ * data: a crash test produced 8 duplicate alert deliveries on one run and 0 on
+ * another (docs/10), so replays are real and intermittent.
  */
 @Service
 public class AlertIngestionService {

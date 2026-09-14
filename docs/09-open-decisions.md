@@ -1,9 +1,9 @@
 # 09 — Décisions ouvertes
 
-Chaque décision ci-dessous a **plusieurs options défendables**. Ma recommandation est indiquée, mais l'arbitrage
-te revient : ce sont exactement les points sur lesquels un jury te demandera « pourquoi ce choix ? ».
+Chaque décision ci-dessous a **plusieurs options défendables**. Une recommandation est indiquée pour chacune ;
+ce sont exactement les points sur lesquels un jury demandera « pourquoi ce choix ? ».
 
-Statut : `ACCEPTÉ` = arbitré et appliqué ; `PROPOSÉ` = en attente de ta validation.
+Statut : `ACCEPTÉ` = arbitré et appliqué ; `PROPOSÉ` = en attente d'arbitrage.
 
 ---
 
@@ -16,7 +16,7 @@ cohérente avec la supervision industrielle et incohérente avec l'autorisation 
 sub-seconde. Choisir B créerait une faille d'architecture que le premier examinateur trouverait. Détail complet
 dans `docs/00-domain-choice.md`.
 
-**Si tu choisis B** : ~20 % du code change (simulateur, features, libellés métier). Toute l'ingénierie de
+**Coût de l'option B** : ~20 % du code change (simulateur, features, libellés métier). Toute l'ingénierie de
 streaming reste identique.
 
 ---
@@ -31,7 +31,7 @@ octets. C'est de l'infrastructure qui ne démontre rien sur le sujet du projet. 
 compatibilité repose sur la CI et non sur un serveur ; c'est explicité et outillé (`docs/02-data-contracts.md`).
 
 **Argument pour B** : « j'ai mis en place un Schema Registry » se dit bien en entretien et démontre une maîtrise
-de la gouvernance de schémas. Si tu veux ce point, il faut budgéter la friction PySpark.
+de la gouvernance de schémas. Retenir ce point impose de budgéter la friction PySpark.
 
 ---
 
@@ -58,7 +58,7 @@ pour un système annoncé temps réel. Le défaut d'`update` (ré-émission d'un
 l'`alert_id` déterministe : une ré-émission met à jour au lieu de dupliquer.
 
 **Argument pour B** : sémantique plus simple, un résultat définitif par fenêtre, aucun risque d'alerte
-« révisée ». Si tu préfères la simplicité de raisonnement à la latence, c'est un choix tenable — il faut alors
+« révisée ». Préférer la simplicité de raisonnement à la latence est un choix tenable — il faut alors
 assumer les 90 s dans la démonstration.
 
 ---
@@ -114,8 +114,8 @@ reconnexion avec `Last-Event-ID` — ce qui compte réellement pour un poste d'a
 WebSocket, cette logique est à écrire entièrement.
 
 **Argument pour B** : STOMP offre un abonnement par sujet côté client (`/topic/machines/M-014`), plus élégant
-que le filtrage par paramètre de requête, et c'est une compétence attendue dans un contexte Spring. Si tu veux
-montrer ce point, B est défendable — la reconnexion devient ta responsabilité.
+que le filtrage par paramètre de requête, et c'est une compétence attendue dans un contexte Spring. Pour
+mettre ce point en avant, B est défendable — la reconnexion devient alors la responsabilité du client.
 
 ---
 
@@ -128,7 +128,7 @@ gagne.
 le sait. B est plus conforme à HTTP mais impose la gestion d'en-têtes côté Angular pour un bénéfice identique
 dans une API interne.
 
-**Argument pour B** : c'est la forme canonique. Si tu vises une API destinée à des tiers, B est le bon choix.
+**Argument pour B** : c'est la forme canonique. Pour une API destinée à des tiers, B est le bon choix.
 
 ---
 

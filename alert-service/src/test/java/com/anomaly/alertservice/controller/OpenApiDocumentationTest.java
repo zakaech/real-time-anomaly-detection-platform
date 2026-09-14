@@ -22,11 +22,10 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 /**
  * The OpenAPI document, checked against the application itself.
  *
- * <p>The central test is {@link #documentsExactlyTheEndpointsThatExist()}, and
- * it is the reason springdoc was chosen over a hand-written {@code openapi.yaml}
- * (decision D-50). It does not compare the document against a list someone
- * typed here -- a list is just a second document to forget. It compares it
- * against Spring's own routing table, so the assertion is:
+ * <p>The central test is {@link #documentsExactlyTheEndpointsThatExist()}
+ * (decision D-50). It does not compare the document against a list typed here,
+ * which would be a second document to forget; it compares it against Spring's
+ * own routing table, so the assertion is:
  *
  * <blockquote>every documented path is routable, and every routable path is
  * documented.</blockquote>

@@ -1,7 +1,7 @@
 """The pandas translation must reproduce the shared reference exactly enough.
 
-This is the test that makes the Phase 1 promise real, and the template Phase 3
-will reuse for Spark: same reference, same tolerance, same awkward windows.
+The Spark translation has the same test: same reference, same tolerance, same
+awkward windows.
 
 **Bit-exact equality is not achievable and not required.** ``math.fsum`` in the
 reference and pandas' pairwise summation add in different orders, so results

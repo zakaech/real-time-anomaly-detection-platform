@@ -14,9 +14,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * Kafka plus idempotence in PostgreSQL</strong>, which yields effectively-once
  * persistence. This is deliberately <em>not</em> exactly-once: the Kafka sink
  * upstream is not transactional, and a restart replays the uncommitted batch.
- * Phase 3's crash test measured 8 duplicate alert deliveries on one run and 0 on
- * another -- duplicates are possible, not guaranteed, and the database is what
- * makes them harmless.
+ * A crash test of the stream processor measured 8 duplicate alert deliveries on
+ * one run and 0 on another (docs/10): duplicates are possible, not guaranteed,
+ * and the database is what makes them harmless.
  */
 @SpringBootApplication
 @EnableConfigurationProperties(AlertServiceProperties.class)

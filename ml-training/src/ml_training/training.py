@@ -465,7 +465,7 @@ def measure_clean_training_variant(
     It uses **the same detector as the selected model**, and the same subsampling
     rule. Comparing a filtered Isolation Forest against a contaminated One-Class
     SVM would measure the difference between two estimators and report it as the
-    cost of contamination -- which is worse than not measuring it at all.
+    cost of contamination.
     """
     configuration = _candidate_detectors(settings)[detector_name]
     detector = configuration["detector"]
@@ -558,7 +558,7 @@ def run_training(
 
 
 def reference_profile(features: pd.DataFrame) -> dict[str, Any]:
-    """Per-feature summary of the training distribution, for Phase 4 drift work.
+    """Per-feature summary of the training distribution, for drift tracking.
 
     Frozen with the artefact so drift is always measured against the same
     origin. Comparing against yesterday instead would make a slow drift

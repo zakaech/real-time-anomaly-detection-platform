@@ -14,8 +14,8 @@ import java.util.UUID;
  * retention and is persisted nowhere; and the 52-feature vector is never parsed
  * by the alerting query, so it never reaches an alert. This response therefore
  * carries the window bounds, the score, and the ranked contributors -- which is
- * what an operator triages on -- and no sensor time series. Promising a chart
- * the data cannot support would be worse than not offering one.
+ * what an operator triages on -- and no sensor time series. The sensor curve
+ * is served separately, from the persisted telemetry windows.
  */
 public record AlertDetail(
         UUID alertId,

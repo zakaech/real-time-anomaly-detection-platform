@@ -1,8 +1,8 @@
 """Measure what the admission rule actually rejects, one condition at a time.
 
-The Phase 3 plan added ``last machine_state == RUNNING`` beside the existing
-``running_ratio >= 0.9``, and required its effect to be **measured** rather than
-asserted to be an improvement. The scored topic cannot answer that on its own:
+The admission rule adds ``last machine_state == RUNNING`` beside
+``running_ratio >= 0.9``; this tool measures the effect of that addition. The
+scored topic cannot answer that on its own:
 both conditions collapse into a single ``MACHINE_NOT_RUNNING`` skip reason, and
 ``running_ratio`` is not a published feature, so the overlap between them is not
 observable downstream.

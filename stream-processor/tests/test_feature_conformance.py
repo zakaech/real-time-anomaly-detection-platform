@@ -4,7 +4,7 @@ This closes the triangle the platform depends on:
 
     telemetry_core.compute_features        (the reference, semantics of record)
         |                    |
-        | Phase 2 tests      | this file
+        | ml_training tests  | this file
         v                    v
     ml_training pandas <-> stream_processor Spark
 

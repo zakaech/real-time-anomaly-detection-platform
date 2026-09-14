@@ -227,12 +227,11 @@ def make_alert_state_handler(*, consecutive_to_open: int, gap_seconds: int) -> A
             # watermark, and the refusal kills the query. It happens whenever a
             # batch carries windows older than the watermark -- routinely after a
             # restart, where the watermark is restored from the checkpoint while
-            # the replayed batch contains data from before it. Found by the
-            # crash-recovery test; the happy path never reaches it.
-            # Clamping to just past the watermark is not a fudge: a requested
-            # timeout already behind it means the silence gap has *itself*
-            # elapsed in event time, so expiring at the next opportunity is the
-            # correct outcome, not an approximation of one.
+            # the replayed batch contains data from before it. Clamping to just
+            # past the watermark is correct, not an approximation: a requested
+            # timeout already behind it means the silence gap has itself elapsed
+            # in event time, so expiring at the next opportunity is the right
+            # outcome.
             requested = (latest_seen + gap_seconds) * 1000
             state.setTimeoutTimestamp(max(requested, int(state.getCurrentWatermarkMs()) + 1))
 

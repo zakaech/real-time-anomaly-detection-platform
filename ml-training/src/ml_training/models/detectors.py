@@ -16,11 +16,11 @@ than the challenger would make the comparison meaningless.
 One structural constraint is worth stating. The feature set contains an exact
 linear dependency: ``range = max - min``. Tree-based and kernel methods are
 indifferent to it, but a covariance-based method inherits a rank-deficient
-matrix. scikit-learn does not raise on that -- it warns and carries on with a
-condition number at the edge of float64 precision, which is worse than failing,
-because the model then loads and scores as if nothing were wrong.
-:class:`EllipticEnvelopeDetector` therefore drops the ``*_range`` columns
-deliberately, and the exclusion is recorded in the artefact rather than hidden.
+matrix. scikit-learn does not raise on that: it warns and carries on with a
+condition number at the edge of float64 precision, and the model then loads
+and scores as if nothing were wrong. :class:`EllipticEnvelopeDetector`
+therefore drops the ``*_range`` columns, and the exclusion is recorded in the
+artefact.
 """
 
 from __future__ import annotations
@@ -278,7 +278,7 @@ class ThreeSigmaDetector(_SubsettingDetector):
 
     By default it sees only the five raw sensor means, because that is the rule a
     plant already has. If a model with the full feature set cannot beat it, the
-    honest conclusion is that the feature engineering earns nothing here.
+    feature engineering earns nothing here.
     """
 
     def __init__(self, *, column_subset: list[int] | None = None) -> None:

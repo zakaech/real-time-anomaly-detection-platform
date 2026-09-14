@@ -7,11 +7,11 @@ loosely typed YAML and a clear failure at startup. Using one tool for both would
 make one of the two jobs harder.
 
 The file separates ``nominal`` from ``simulation`` per profile, and the
-separation is load-bearing (decision D-19):
+separation matters (decision D-19):
 
 * ``nominal`` is what a plant declares about a machine. It is the only block
-  that will ever leave the simulator -- step 5 extracts it into the Flyway seed
-  for the ``machine`` table.
+  that ever leaves the simulator: it is extracted into the Flyway seed for the
+  ``machine`` table.
 * ``simulation`` is the true physics: noise sigmas, coupling coefficients, wear
   rate. Nobody knows these in production. Publishing them to the platform would
   leak the answer into the design of the detector.
@@ -139,8 +139,8 @@ class LifecycleConfig(_Model):
     """Machine state machine (decision D-21).
 
     Without it ``machine_state`` would be a constant and the field would carry no
-    information -- and Phase 3 could demonstrate neither "only RUNNING windows
-    are scored" nor contextual anomalies.
+    information; neither "only RUNNING windows are scored" nor contextual
+    anomalies would be possible.
     """
 
     running_seconds: float = Field(gt=0.0)

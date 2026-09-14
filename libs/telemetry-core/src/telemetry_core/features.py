@@ -1,7 +1,6 @@
 """Feature specification and reference implementation.
 
-This module is the countermeasure to training/serving skew, and it is worth
-being precise about how -- because the obvious framing is wrong.
+This module is the countermeasure to training/serving skew.
 
 Spark computes aggregations with Spark SQL over distributed columns; the
 training pipeline computes them with pandas over a local frame. Those two cannot
@@ -14,7 +13,7 @@ is:
    semantics of every aggregation;
 3. conformance tests asserting that each engine's translation reproduces the
    reference output on identical input. The pandas translation is checked in
-   ``ml-training``; the Spark one will be checked the same way.
+   ``ml-training``, the Spark one in ``stream-processor``.
 
 Skew is therefore prevented by a shared specification plus a proof of
 equivalence, not by a shared function that cannot exist.
