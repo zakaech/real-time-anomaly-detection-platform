@@ -9,6 +9,8 @@ import {
   viewChild,
 } from '@angular/core';
 import {
+  BarController,
+  BarElement,
   CategoryScale,
   Chart,
   ChartConfiguration,
@@ -34,14 +36,20 @@ import 'chartjs-adapter-date-fns';
  * it here rather than adding ng2-charts avoids a second dependency that tracks
  * Angular major versions.
  *
- * Only the pieces actually used are registered, so the bundle carries the line
- * and scatter controllers and nothing else.
+ * Only the pieces actually used are registered, so the bundle carries the line,
+ * scatter and bar controllers and nothing else. The list is load-bearing, not a
+ * convenience: Chart.js 4 is tree-shakable, and a chart type left out of it does
+ * not degrade -- it throws `"<type>" is not a registered controller` at
+ * construction and leaves an empty canvas. That is exactly what happened to the
+ * contributor chart (a `bar` chart) when only line and scatter were registered.
  */
 Chart.register(
   LineController,
   ScatterController,
+  BarController,
   LineElement,
   PointElement,
+  BarElement,
   LinearScale,
   CategoryScale,
   TimeScale,
