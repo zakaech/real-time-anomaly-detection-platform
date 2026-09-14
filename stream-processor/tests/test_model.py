@@ -1,6 +1,7 @@
 """The artefact is refused unless it matches this environment exactly.
 
-Phase 3 loads a pickle trained by Phase 2 and scores production traffic with it.
+The streaming job loads a pickle trained offline and scores production traffic
+with it.
 Every mismatch this file exercises has the same failure mode: the artefact loads,
 scores, and is quietly wrong. Nothing raises on its own, so the checks have to be
 explicit and they have to block -- a job that refuses to start is an incident, a
@@ -74,8 +75,8 @@ class TestTheJobRefusesAnIncompatibleArtefact:
 
     def test_a_different_scikit_learn_is_refused(self, tmp_path: Path) -> None:
         """Unpickling an estimator across scikit-learn versions is not guaranteed
-        to raise. It can succeed and predict differently, which is the reason
-        this check cannot be a warning."""
+        to raise. It can succeed and predict differently, so this check cannot
+        be a warning."""
         directory = _artifact_with(tmp_path, sklearn_version="0.24.2")
 
         with pytest.raises(ArtifactMismatchError, match="scikit-learn"):

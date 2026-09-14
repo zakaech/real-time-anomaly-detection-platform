@@ -33,7 +33,7 @@ def _without_anomalies(fleet: FleetConfig) -> FleetConfig:
 
 class TestPhysicalLimits:
     def test_limits_mirror_the_contract(self, schema_dir: Path) -> None:
-        """The constants are a copy of the JSON Schema; this keeps them honest."""
+        """The constants are a copy of the JSON Schema; this keeps them in sync."""
         schema = load_json(schema_dir / "telemetry-raw.v1.json")
         readings = schema["properties"]["readings"]["properties"]
         for sensor, (low, high) in PHYSICAL_LIMITS.items():
@@ -157,7 +157,7 @@ class TestSensorCoherence:
     def test_specific_consumption_is_stable_without_wear(self, fleet: FleetConfig) -> None:
         """power_per_rpm is the feature the whole design leans on.
 
-        On a healthy machine it must be roughly constant; the Phase 2 model can
+        On a healthy machine it must be roughly constant; the model can
         only use its rise as a wear signature if it does not wander on its own.
         """
         samples = [
@@ -196,7 +196,7 @@ class TestSensorCoherence:
 
 class TestLifecycle:
     def test_every_operating_state_occurs(self, fleet: FleetConfig) -> None:
-        """Decision D-21: machine_state must carry information for Phase 3."""
+        """Decision D-21: machine_state must carry information for the streaming job."""
         observed = {sample.machine_state for sample in _run(fleet, seed=13, ticks=4000)}
         assert MachineState.RUNNING in observed
         assert MachineState.IDLE in observed

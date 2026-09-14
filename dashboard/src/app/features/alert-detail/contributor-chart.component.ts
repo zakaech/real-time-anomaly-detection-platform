@@ -6,10 +6,8 @@ import { TimeSeriesChartComponent } from '../../shared/time-series-chart.compone
 /**
  * The features that departed most from the training reference.
  *
- * This is what turns a score into something an operator can act on, and it is
- * the only per-feature detail an alert carries: the full 52-feature vector is
- * never parsed by the alerting query, so it is not available here and no attempt
- * is made to pretend otherwise.
+ * The only per-feature detail an alert carries: the full 52-feature vector is
+ * never parsed by the alerting query, so it is not available here.
  *
  * Note `z_score`, not `zScore` -- the backend reuses one DTO for the Kafka
  * message and the REST response, and the Kafka side is snake_case (D-45).

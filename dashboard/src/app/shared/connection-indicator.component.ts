@@ -4,9 +4,9 @@ import { ConnectionState } from '../core/models/stream-event.model';
 /**
  * Whether the live channel is actually live.
  *
- * This is not decoration. Without traffic a proxy closes an idle SSE connection
- * after 30-60 seconds, and a dashboard that stopped updating while still looking
- * connected is the most deceptive failure a live display has. `reconnecting` is
+ * Without traffic a proxy closes an idle SSE connection after 30-60 seconds,
+ * and a dashboard that stopped updating while still looking connected is the
+ * most deceptive failure a live display has. `reconnecting` is
  * shown differently from `error` because the first heals itself and the second
  * does not.
  */

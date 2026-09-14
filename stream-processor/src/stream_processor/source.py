@@ -63,8 +63,8 @@ def read_raw_stream(
         .option("kafka.security.protocol", kafka.security_protocol)
         .option("subscribe", topics.telemetry_raw)
         .option("startingOffsets", settings.starting_offsets)
-        # A silent gap is worse than a stop for a detection system: if the
-        # offsets we need have been aged out by retention, fail loudly.
+        # If the offsets we need have been aged out by retention, fail rather
+        # than skip silently: a gap in a detection system must be visible.
         .option("failOnDataLoss", "true")
     )
     if settings.max_offsets_per_trigger is not None:

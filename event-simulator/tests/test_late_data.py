@@ -1,4 +1,4 @@
-"""Controlled generation of late data, for the Phase 3 watermark work.
+"""Controlled generation of late data, for the streaming watermark.
 
 The simulator produces the data; it makes no windowing decision. What matters
 here is that the delay is a *publication* delay: ``event_time`` keeps the instant
@@ -155,7 +155,7 @@ class TestObservedLateness:
         self, fleet: FleetConfig, topics: KafkaTopics
     ) -> None:
         """The observable outcome: within one machine's stream, event_time goes
-        backwards on the wire. That is precisely what Phase 3 has to absorb."""
+        backwards on the wire, which is what the watermark has to absorb."""
         configured = _late_config(
             fleet,
             jitter=fleet.late_data.jitter.model_copy(

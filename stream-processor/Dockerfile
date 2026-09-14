@@ -6,8 +6,7 @@
 #
 #   docker build -f stream-processor/Dockerfile -t stream-processor .
 #
-# Base image and JDK are a verified constraint, not a preference. Spark 3.5 is
-# certified for Java 8/11/17. The current python:3.11-slim tag moved to Debian
+# Spark 3.5 is certified for Java 8/11/17. The current python:3.11-slim tag moved to Debian
 # 13, which ships Java 21 only, and Arrow inside Spark then fails with
 #   sun.misc.Unsafe or java.nio.DirectByteBuffer.<init>(long,int) not available
 # Pinning bookworm keeps openjdk-17 available.
@@ -40,12 +39,11 @@ RUN pip install --no-cache-dir -e "stream-processor[dev]"
 COPY contracts contracts
 COPY stream-processor/tests stream-processor/tests
 
-# Unprivileged -- and the user is created BEFORE the Ivy cache is warmed just
-# below. That order is load-bearing, not tidiness: Spark resolves jars under
-# ${user.home}/.ivy2, so warming the cache as root would leave it in /root,
-# unreadable by the runtime user. The job would then try to reach Maven at
-# startup and fail on a machine with no network -- the exact dependency this
-# warm-up exists to remove.
+# Unprivileged, and the user is created BEFORE the Ivy cache is warmed just
+# below: Spark resolves jars under ${user.home}/.ivy2, so warming the cache as
+# root would leave it in /root, unreadable by the runtime user. The job would
+# then try to reach Maven at startup and fail on a machine with no network,
+# the exact dependency this warm-up exists to remove.
 #
 # /checkpoints is created here so the named volume mounted over it inherits
 # this ownership. Without it Docker creates the mount point root-owned and the

@@ -57,7 +57,7 @@ info() { printf '        %s\n' "$1"; }
 # Reading .env
 #
 # The file is parsed, never sourced. `. .env` would EXECUTE it, and one line in
-# the template is enough to show why that is not pedantry:
+# the template shows why that matters:
 #
 #   KAFKA_HEAP_OPTS=-Xmx768m -Xms768m
 #
@@ -229,11 +229,10 @@ check_kafka() {
 }
 
 # ---------------------------------------------------------------------------
-# Topics. The partition counts are not decoration: 6 for the hot path so any
-# consumer group up to 6 balances, 3 for alerts to match the Spring listener
-# concurrency, 1 for the two topics a human reads end to end. Kafka can never
-# REDUCE a partition count, so a wrong value here is permanent -- which is
-# exactly why it is asserted rather than assumed.
+# Topics. The partition counts: 6 for the hot path so any consumer group up to
+# 6 balances, 3 for alerts to match the Spring listener concurrency, 1 for the
+# two topics a human reads end to end. Kafka can never REDUCE a partition
+# count, so a wrong value here is permanent, which is why it is asserted.
 # ---------------------------------------------------------------------------
 check_topics() {
   step "Topics Kafka"

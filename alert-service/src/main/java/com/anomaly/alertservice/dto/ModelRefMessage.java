@@ -9,9 +9,8 @@ import java.time.Instant;
 /**
  * Which model produced the score.
  *
- * <p>trainedAt and artifactSha256 are optional in the contract and were null on
- * every alert until the Phase 3 projection was fixed to carry them. The sha256
- * is what ties an alert to the exact binary that scored it.
+ * <p>trainedAt and artifactSha256 are optional in the contract. The sha256 is
+ * what ties an alert to the exact binary that scored it.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ModelRefMessage(

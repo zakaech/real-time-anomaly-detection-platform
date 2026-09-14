@@ -56,12 +56,12 @@ select = [
     "RUF",
 ]
 ignore = [
-    # Long comments are load-bearing here: they carry the design rationale.
+    # Comments carrying design rationale are allowed to exceed the line length.
     "E501",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests assert on magic values by nature; that is the point of a golden test.
+# Golden tests assert on magic values by nature.
 "tests/*" = ["N802"]
 
 # ---------------------------------------------------------------------------

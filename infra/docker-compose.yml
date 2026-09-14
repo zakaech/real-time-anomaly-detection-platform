@@ -297,11 +297,9 @@ services:
 volumes:
   kafka_data:
   postgres_data:
-  # Declared now, consumed from step 4 on. Spark checkpoints must survive a
-  # container restart or recovery guarantees are void (docs/04 section 3).
+  # Spark checkpoints must survive a container restart or recovery guarantees
+  # are void (docs/04 section 3).
   spark_checkpoints:
-  # Model artifacts are immutable once published (docs/07 section 6).
-  model_artifacts:
 
 networks:
   anomaly-net:

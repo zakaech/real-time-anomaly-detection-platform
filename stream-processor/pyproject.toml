@@ -11,8 +11,8 @@ requires-python = ">=3.11,<3.12"
 license = { text = "MIT" }
 
 # An application pins (decision D-16). The scikit-learn, numpy and pandas pins
-# are not a preference: the artefact refuses to load unless scikit-learn matches
-# exactly, and the pickle was written by these versions.
+# are exact because the artefact refuses to load unless scikit-learn matches,
+# and the pickle was written by these versions.
 #
 # PySpark 3.5.3 with Java 17 (decision D-33/D-34). Java 21 breaks Arrow inside
 # Spark 3.5 with "sun.misc.Unsafe or java.nio.DirectByteBuffer not available",

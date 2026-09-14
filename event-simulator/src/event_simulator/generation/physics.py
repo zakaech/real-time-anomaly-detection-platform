@@ -1,7 +1,7 @@
 """The coupling that turns a hidden state into five coherent measurements.
 
 This module is where the dataset earns its value. Five independently noised
-signals would contain no multivariate structure, and the Phase 2 model could not
+signals would contain no multivariate structure, and the model could not
 beat a per-sensor threshold -- the comparison docs/07-ml-methodology.md makes
 mandatory. So everything is derived from two hidden variables:
 
@@ -48,8 +48,8 @@ __all__ = [
 SECONDS_PER_DAY = 86_400.0
 
 #: Absolute bounds from contracts/json-schema/telemetry-raw.v1.json.
-#: Mirrored rather than imported because the schema is a JSON document, and kept
-#: honest by a test that reads the schema and compares.
+#: Mirrored rather than imported because the schema is a JSON document; a test
+#: reads the schema and compares.
 PHYSICAL_LIMITS: dict[str, tuple[float, float]] = {
     "temperature_c": (-50.0, 300.0),
     "vibration_mm_s": (0.0, 100.0),
@@ -63,9 +63,9 @@ _IDLE_MOTION = 0.35
 _STARTING_FLOOR = 0.20
 
 #: Vibration behaves differently from the rest: a machine shakes more while
-#: starting than while running steadily. That is the whole point of publishing
-#: machine_state -- high vibration during STARTING is normal, and the same
-#: reading while RUNNING is not (docs/02 section 4).
+#: starting than while running steadily, which is why machine_state is
+#: published: high vibration during STARTING is normal, and the same reading
+#: while RUNNING is not (docs/02 section 4).
 _VIBRATION_MULTIPLIER: dict[MachineState, float] = {
     MachineState.RUNNING: 1.0,
     MachineState.IDLE: 0.9,

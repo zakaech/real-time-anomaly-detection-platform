@@ -8,9 +8,8 @@ import java.util.UUID;
  *
  * <p>Spring Data cannot express this one: a {@code @Modifying} query is only
  * allowed to return void or a row count, and what this statement needs to return
- * is <em>whether the row was inserted or updated</em>. Writing it against
- * JdbcTemplate is also more honest -- it is hand-written SQL, and pretending
- * otherwise by dressing it as a derived query would hide the part that matters.
+ * is <em>whether the row was inserted or updated</em>. It is hand-written SQL,
+ * and JdbcTemplate keeps it visible as such.
  */
 public interface AlertUpsertRepository {
 

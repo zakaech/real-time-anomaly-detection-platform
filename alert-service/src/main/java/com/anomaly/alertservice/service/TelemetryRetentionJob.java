@@ -18,9 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
  * roughly 5 700 rows an hour once the update-mode duplicates collapse. Its only
  * reader is a chart showing recent history, so old rows are dead weight.
  *
- * <p>Deliberately not a partitioned table with DROP PARTITION: that is the right
- * answer at millions of rows and premature here. A DELETE by age is honest about
- * the scale it is written for.
+ * <p>Not a partitioned table with DROP PARTITION: that is the right answer at
+ * millions of rows and premature here.
  */
 @Component
 public class TelemetryRetentionJob {

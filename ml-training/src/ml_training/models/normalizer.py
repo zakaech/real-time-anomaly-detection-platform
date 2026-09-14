@@ -1,6 +1,6 @@
 """Per-machine robust normalisation, as the first step of the pipeline.
 
-Decision D-07 from Phase 0: one global model, but features normalised per
+Decision D-07: one global model, but features normalised per
 machine. Without it a machine that legitimately runs hotter than its neighbours
 would be permanently anomalous, and the detector would spend its budget
 rediscovering the fleet's heterogeneity instead of its faults.
@@ -10,7 +10,7 @@ training data is deliberately contaminated (decision D-27), and a mean is
 dragged by the very anomalies the model is meant to find later.
 
 The transformer lives **inside** the serialised pipeline, so the streaming job
-in Phase 3 calls one method and reimplements nothing. That is why it takes a
+calls one method and reimplements nothing. That is why it takes a
 DataFrame carrying ``machine_id`` rather than a bare matrix: the machine is part
 of the input, not context the caller has to apply itself.
 """
@@ -111,7 +111,7 @@ class PerMachineNormalizer(BaseEstimator, TransformerMixin):  # type: ignore[mis
         return sorted(set(machines) - set(self.machine_index_))
 
     def to_profile_dict(self) -> dict[str, Any]:
-        """Export the fitted profiles for inspection and for Phase 4 drift work."""
+        """Export the fitted profiles for inspection and drift tracking."""
         return {
             "feature_names": self.feature_names_,
             "fleet": {

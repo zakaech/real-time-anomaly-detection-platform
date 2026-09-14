@@ -103,7 +103,7 @@ C'est une décision structurante (D-04).
 | Résultat | définitif | révisable |
 | Risque | détection tardive | alerte émise puis révisée |
 
-Je retiens **`update`**. Le raisonnement : avec `append`, une anomalie détectée à 14:23 n'est signalée qu'à
+Retenu : **`update`**. Le raisonnement : avec `append`, une anomalie détectée à 14:23 n'est signalée qu'à
 14:24:30 au mieux — pour un système vendu comme « temps réel », c'est difficile à défendre. Le défaut d'`update`
 (ré-émissions successives d'une même fenêtre) serait rédhibitoire s'il produisait des alertes en double ; or
 `alert_id` étant déterministe sur `(machine_id, window_start, model)`, une ré-émission **met à jour** la même

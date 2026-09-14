@@ -153,8 +153,8 @@ public class AlertController {
 
         int effectiveSize = size == null ? properties.api().defaultPageSize() : size;
         if (effectiveSize > properties.api().maxPageSize()) {
-            // A hard ceiling, not advice: without it a single request can ask
-            // for the whole table and turn pagination into a formality.
+            // Hard ceiling: without it a single request can ask for the whole
+            // table and turn pagination into a formality.
             effectiveSize = properties.api().maxPageSize();
         }
         if (from != null && to != null && from.isAfter(to)) {

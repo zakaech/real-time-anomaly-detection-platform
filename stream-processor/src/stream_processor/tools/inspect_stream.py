@@ -4,13 +4,11 @@ Every number this prints is counted from messages that exist in Kafka. It is the
 tool used to produce the figures in docs/10, so that no measurement in the
 documentation comes from anywhere else.
 
-Two of the numbers exist because Phase 3 decided something and promised to
-measure the consequence rather than assume it:
+Two of the numbers exist to measure the consequence of a design decision:
 
 * the **update ratio** -- how many times a single window is published, given
   that ``telemetry.scored`` is written in update mode (decision D-36). This is
-  the cost of choosing low latency over one-shot emission, and the plan said to
-  measure it before optimising anything;
+  the cost of choosing low latency over one-shot emission;
 * the **processing delay** -- ``scored_at - window_end``, the contract's own
   latency field, so the reported latency is the one the platform publishes
   rather than a second definition invented here. It is reported twice: over all

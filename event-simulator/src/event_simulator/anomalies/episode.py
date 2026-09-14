@@ -3,7 +3,7 @@
 The episode -- not the individual sample -- is the unit that matters for
 evaluation. A plant operator does not care that 43 of 60 anomalous points were
 flagged; they care that the bearing failure was caught, and how early
-(docs/07-ml-methodology.md section 4.1). ``episode_id`` is what lets Phase 2
+(docs/07-ml-methodology.md section 4.1). ``episode_id`` is what lets the evaluation
 group samples back into occurrences and measure detection latency.
 """
 

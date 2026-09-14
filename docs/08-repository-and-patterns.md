@@ -228,8 +228,8 @@ commit annoncerait au dashboard une alerte qui n'existera peut-être jamais.
 
 ## 5. Conventions Git
 
-- **Anglais** pour le code, les noms, les commits et les branches. Le français reste dans `docs/` pour ta
-  soutenance.
+- **Anglais** pour le code, les noms, les commits et les branches. Le français reste dans `docs/`, destiné
+  à la soutenance.
 - **Conventional Commits** : `feat(stream-processor): add sliding window feature builder`. Un préfixe de
   composant rend l'historique lisible dans un monorepo.
 - Branches : `feat/…`, `fix/…`, `docs/…`, `chore/…`.

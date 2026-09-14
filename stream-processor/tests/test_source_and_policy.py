@@ -225,8 +225,8 @@ class TestAdmission:
         assert reason is SkipReason.MACHINE_NOT_RUNNING
 
     def test_a_window_ending_outside_running_is_not_scored(self) -> None:
-        """The Phase 2 finding: 42 of 221 false positives ended in MAINTENANCE
-        while still being more than 90 % RUNNING."""
+        """False positives were found on windows that ended in MAINTENANCE while
+        still being more than 90 % RUNNING (docs/07)."""
         reason = admission_skip_reason(
             sample_count=60, running_ratio=0.95, machine_state="MAINTENANCE"
         )

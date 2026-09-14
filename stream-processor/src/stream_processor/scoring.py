@@ -17,10 +17,10 @@ only the wrapper that feeds them.
 The pipeline's imputer handles it, and its missingness indicator turns the
 absence into a signal rather than erasing it.
 
-**Errors.** A failure to *load* the artefact propagates and fails the job, which
-is the intent: scoring with an unverified model is worse than not scoring. A
-failure while scoring a batch also propagates, because it means a type or data
-bug, and masking it would produce a plant that looks healthy.
+**Errors.** A failure to *load* the artefact propagates and fails the job:
+scoring with an unverified model must not happen. A failure while scoring a
+batch also propagates, because it means a type or data bug, and masking it
+would produce a plant that looks healthy.
 """
 
 from __future__ import annotations

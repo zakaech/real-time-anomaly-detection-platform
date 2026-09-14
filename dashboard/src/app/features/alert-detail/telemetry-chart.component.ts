@@ -104,7 +104,7 @@ export class TelemetryChartComponent {
   protected readonly signals = SENSOR_SIGNALS;
 
   /** Which signal is on screen. Temperature first: it is the one an operator
-   * looks at, and the Phase 2 contributors are dominated by temperature. */
+   * looks at first. */
   private readonly selectedSignal = signal<SensorKey>('temperatureCMean');
   protected readonly selected = this.selectedSignal.asReadonly();
 
@@ -161,7 +161,7 @@ export class TelemetryChartComponent {
             borderWidth: 1.6,
             pointRadius: 0,
             tension: 0,
-            // The whole point: a hole in the data stays a hole.
+            // A hole in the data stays a hole.
             spanGaps: false,
           },
           {

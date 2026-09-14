@@ -116,8 +116,8 @@ class AlertControllerTest extends PostgresTestBase {
                 .andExpect(jsonPath("$.machineCode").value("M-011"))
                 .andExpect(jsonPath("$.status").value("NEW"))
                 .andExpect(jsonPath("$.topContributors.length()").value(2))
-                // Restored by the Phase 3 fix: without it an alert cannot be
-                // tied back to the artefact that produced it.
+                // Without it an alert cannot be tied back to the artefact that
+                // produced it.
                 .andExpect(
                         jsonPath("$.model.artifactSha256")
                                 .value("0f608323f944e63d30b80cc91418c10b3cfb1d3fc46bac184d3591c03a8d0aa5"))

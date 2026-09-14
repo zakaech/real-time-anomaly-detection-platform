@@ -1,7 +1,7 @@
 """Vectorised pandas translation of the shared feature specification.
 
-This is one of the two engine translations promised in Phase 1. It is driven by
-``telemetry_core.features`` -- the aggregations, their order and their exact
+This is one of the two engine translations (the other is Spark). It is driven
+by ``telemetry_core.features`` -- the aggregations, their order and their exact
 semantics all come from there -- and ``tests/test_feature_conformance.py``
 asserts that it reproduces the reference implementation on random windows.
 

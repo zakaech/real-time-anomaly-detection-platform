@@ -1,17 +1,15 @@
 # Shell scripts must keep LF endings whatever the checkout platform.
 #
-# A CRLF shebang makes the interpreter "not found" inside a Linux container --
-# the script exists, is executable, and still fails. It cost one debugging cycle
-# on the dashboard entrypoint; this makes it impossible to reintroduce by
-# checking the repository out on Windows.
+# A CRLF shebang makes the interpreter "not found" inside a Linux container:
+# the script exists, is executable, and still fails. This makes it impossible
+# to reintroduce by checking the repository out on Windows.
 *.sh text eol=lf
 Dockerfile text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 
 # The model artefact is committed (D-48) and its SHA-256 is verified at every
-# startup. Declaring it binary is not decoration: git's text heuristic is a
-# guess, and a single CRLF translation on a Windows checkout would change the
-# digest and make the streaming job refuse to start -- on the reviewer's
-# machine, never on ours.
+# startup. Git's text heuristic is a guess, and a single CRLF translation on a
+# Windows checkout would change the digest and make the streaming job refuse
+# to start.
 *.joblib binary

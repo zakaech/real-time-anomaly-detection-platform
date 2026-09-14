@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""Keeps .env.example and the compose file honest about each other.
+"""Keeps .env.example and the compose file consistent with each other.
 
 Two failures this catches, both silent:
 
 * a variable declared in ``.env.example`` that nothing interpolates. It reads
-  like configuration, someone changes it, and nothing happens. Phase 6 found
-  two: ``KAFKA_EXTERNAL_BOOTSTRAP``, never referenced anywhere, and
-  ``POSTGRES_PORT``, which was worse than useless because the JDBC URL had the
-  port written into it -- editing the variable changed nothing at all, while
-  looking like it should.
+  like configuration, someone changes it, and nothing happens.
 
 * a variable compose needs that the template does not declare. ``docker compose
   config`` already fails on that one, but only for variables with no fallback;

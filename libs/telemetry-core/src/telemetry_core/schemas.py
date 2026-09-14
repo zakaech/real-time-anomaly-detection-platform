@@ -673,8 +673,8 @@ class TelemetryLabel:
 
     Never consumed by the stream processor. It exists for offline evaluation and
     drift tracking only. ``emitted_at`` is always later than ``event_time``, often
-    by days -- that lag is the nature of a label in production, and modelling it
-    honestly is why this is a separate stream (docs/02 section 5).
+    by days -- that lag is the nature of a label in production, which is why
+    this is a separate stream (docs/02 section 5).
     """
 
     machine_id: str

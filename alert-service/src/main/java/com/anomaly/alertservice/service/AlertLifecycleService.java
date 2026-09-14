@@ -21,9 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Status transitions driven by an operator.
  *
- * <p>Phase 4 implements the one transition the brief asks for, NEW to
- * ACKNOWLEDGED. The database CHECK already accepts RESOLVED and DISMISSED, so
- * extending this later needs no migration.
+ * <p>Only one transition is implemented, NEW to ACKNOWLEDGED. The database
+ * CHECK already accepts RESOLVED and DISMISSED, so extending this later needs
+ * no migration.
  */
 @Service
 public class AlertLifecycleService {
@@ -49,9 +49,9 @@ public class AlertLifecycleService {
     /**
      * Acknowledge an alert.
      *
-     * <p>One transaction covers both the status change and the audit row: an
-     * acknowledged alert with no record of who acknowledged it, or a record of
-     * an acknowledgement that did not happen, would each be worse than failing.
+     * <p>One transaction covers both the status change and the audit row: neither
+     * an acknowledged alert with no record of who acknowledged it, nor a record
+     * of an acknowledgement that did not happen, may exist.
      *
      * @throws AlertNotFoundException if no such alert exists
      * @throws InvalidStateTransitionException if it is not NEW, or if
@@ -109,12 +109,10 @@ public class AlertLifecycleService {
                 actor,
                 previous);
 
-        // Raised here, delivered by the broadcaster AFTER the commit -- the same
+        // Raised here, delivered by the broadcaster AFTER the commit, the same
         // pattern ingestion uses for alert.created. Broadcasting from inside this
-        // transaction once let a dead browser connection throw through the
-        // fan-out, roll the acknowledgement back and answer 500. An operator's
-        // action commits or fails on its own merits; the display channel gets
-        // told afterwards and cannot vote.
+        // transaction would let a failing client connection roll the
+        // acknowledgement back.
         events.publishEvent(new AlertBroadcaster.AlertUpdatedEvent(alertId));
         return mapper.toDetail(alert, acknowledgements.findByAlertIdOrderByOccurredAtDesc(alertId));
     }
