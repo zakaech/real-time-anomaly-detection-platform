@@ -536,22 +536,31 @@ conclure à un dysfonctionnement.
 
 ## 16. Captures d'écran
 
-**Aucune capture n'est actuellement présente dans le dépôt.** Les fichiers
-ci-dessous sont donc *attendus*, pas fournis — ils sont listés comme chemins et
-non intégrés comme images, pour que cette section n'affiche pas cinq cadres
-vides. Une absence annoncée se voit et se corrige ; une capture fabriquée donne
-une impression de preuve sans en être une.
-
-| Vue | Fichier attendu |
-|---|---|
-| Schéma d'architecture | `docs/screenshots/architecture.png` |
-| Dashboard temps réel | `docs/screenshots/live-dashboard.png` |
-| Détail d'une alerte | `docs/screenshots/alert-detail.png` |
-| Graphique de télémétrie | `docs/screenshots/telemetry-chart.png` |
-| Historique | `docs/screenshots/alert-history.png` |
-
-La marche à suivre pour les produire est dans
+Cinq captures, prises le 14 septembre 2026 sur la plateforme en marche après
+`make demo`. Aucune n'est mise en scène ni retouchée : les valeurs visibles
+— 19 alertes, scores, horodatages — sont celles que la base contenait à cet
+instant. La procédure pour les reproduire est dans
 [`docs/screenshots/README.md`](docs/screenshots/README.md).
+
+### Schéma d'architecture
+
+![Schéma d'architecture : event-simulator → Kafka → stream-processor (avec model.joblib vérifié) → Kafka → alert-service → PostgreSQL, nginx et le dashboard Angular](docs/screenshots/architecture.png)
+
+### Dashboard temps réel
+
+![Flux temps réel : 19 alertes affichées, 15 non acquittées, compteurs par sévérité, indicateur « En direct », flux trié par date de détection](docs/screenshots/live-dashboard.png)
+
+### Détail d'une alerte
+
+![Alerte CRITICAL sur M-013 (pompe, LINE-C) : score 0,999676 contre un seuil de 0,992765, fenêtre de 60 s, trois contributeurs à z-score négatif, modèle one_class_svm 2.0.0 avec son empreinte SHA-256, formulaire d'acquittement](docs/screenshots/alert-detail.png)
+
+### Graphique de télémétrie
+
+![Pression (bar), moyenne par fenêtre de 60 s : les fenêtres signalées anormales sont marquées en rouge, une infobulle affiche la valeur d'un point](docs/screenshots/telemetry-chart.png)
+
+### Historique
+
+![Historique avec filtres appliqués — sévérité HIGH et statut NEW : 4 alertes sur 19, « 1–4 sur 4 », tableau trié par date de détection, pagination](docs/screenshots/alert-history.png)
 
 ## 17. Tests et qualité
 
@@ -717,7 +726,7 @@ simulateur ; SHA-256 de l'artefact, vérifié à chaque démarrage.
 ├── docs/
 │   ├── 00..11-*.md       Conception, sémantique, modèle de données, phases
 │   ├── adr/              9 ADR
-│   └── screenshots/      Captures attendues (à produire)
+│   └── screenshots/      5 captures de la plateforme en marche, et comment les refaire
 ├── .env.example          48 variables, toutes documentées et toutes utilisées
 └── Makefile              Points d'entrée
 ```
