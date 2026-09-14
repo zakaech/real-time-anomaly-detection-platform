@@ -51,6 +51,16 @@ public class AlertBroadcaster {
     /** One alert was really inserted. Raised inside the transaction, delivered after it commits. */
     public record AlertCreatedEvent(UUID alertId) {}
 
+    /**
+     * An operator changed one alert. Raised inside the transaction, delivered
+     * after it commits -- the same shape as {@link AlertCreatedEvent}, and for
+     * the same reason, plus one learned the hard way: broadcasting from inside
+     * the operator's transaction let a dead browser connection roll back a
+     * committed-looking acknowledgement and answer 500. The display channel
+     * must never be able to undo an operator action.
+     */
+    public record AlertUpdatedEvent(UUID alertId) {}
+
     private final AlertRepository alerts;
     private final AlertMapper mapper;
     private final IngestionMetrics metrics;
@@ -101,7 +111,20 @@ public class AlertBroadcaster {
     public SseEmitter subscribe(Set<AlertSeverity> severities, String lineCode, Long lastEventId) {
         // No timeout: the connection is meant to stay open, and the heartbeat is
         // what detects a dead peer.
-        SseEmitter emitter = new SseEmitter(0L);
+        return subscribe(new SseEmitter(0L), severities, lineCode, lastEventId);
+    }
+
+    /**
+     * Register a client on a caller-supplied emitter.
+     *
+     * <p>This seam exists for one test. A peer whose connection the container
+     * has already declared dead cannot be manufactured through MockMvc, and
+     * that peer is exactly the case that once turned an acknowledgement into a
+     * 500 and silenced the heartbeat. Production always goes through the
+     * three-argument overload.
+     */
+    public SseEmitter subscribe(
+            SseEmitter emitter, Set<AlertSeverity> severities, String lineCode, Long lastEventId) {
         String id = UUID.randomUUID().toString();
         Subscriber subscriber = new Subscriber(emitter, severities, lineCode);
         subscribers.put(id, subscriber);
@@ -112,18 +135,18 @@ public class AlertBroadcaster {
         emitter.onError(throwable -> remove(id));
 
         if (lastEventId != null) {
-            replayMissed(subscriber, lastEventId);
+            replayMissed(id, subscriber, lastEventId);
         }
         log.info("sse_client_connected clients={} last_event_id={}", metrics.currentSseClients(), lastEventId);
         return emitter;
     }
 
-    private void replayMissed(Subscriber subscriber, long lastEventId) {
+    private void replayMissed(String id, Subscriber subscriber, long lastEventId) {
         List<AlertEntity> missed =
                 alerts.findAfterEventSeq(
                         lastEventId, PageRequest.of(0, properties.sse().maxReplayEvents()));
         for (AlertEntity alert : missed) {
-            send(subscriber, "alert.created", mapper.toStreamEvent(alert));
+            send(id, subscriber, "alert.created", mapper.toStreamEvent(alert));
         }
         if (!missed.isEmpty()) {
             log.info("sse_replayed events={} after_seq={}", missed.size(), lastEventId);
@@ -141,21 +164,29 @@ public class AlertBroadcaster {
                 .ifPresent(streamEvent -> broadcast("alert.created", streamEvent));
     }
 
-    /** Used by the lifecycle service when an operator changes an alert. */
-    public void broadcastUpdated(AlertEntity alert) {
-        broadcast("alert.updated", mapper.toStreamEvent(alert));
+    /**
+     * Delivered only once the operator's transaction has committed. The row is
+     * re-read here rather than carried in the event, so what the dashboards
+     * receive is what the database holds -- never an in-flight entity that a
+     * later rollback could have contradicted.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAlertUpdated(AlertUpdatedEvent event) {
+        alerts.findByIdWithMachine(event.alertId())
+                .map(mapper::toStreamEvent)
+                .ifPresent(streamEvent -> broadcast("alert.updated", streamEvent));
     }
 
     private void broadcast(String eventName, AlertStreamEvent event) {
         subscribers.forEach(
                 (id, subscriber) -> {
                     if (subscriber.accepts(event)) {
-                        send(subscriber, eventName, event);
+                        send(id, subscriber, eventName, event);
                     }
                 });
     }
 
-    private void send(Subscriber subscriber, String eventName, AlertStreamEvent event) {
+    private void send(String id, Subscriber subscriber, String eventName, AlertStreamEvent event) {
         try {
             subscriber
                     .emitter()
@@ -169,22 +200,62 @@ public class AlertBroadcaster {
                                     .data(event));
         } catch (IOException | IllegalStateException e) {
             // A client that cannot be written to is gone, or too slow to keep
-            // up. Closing it is the backpressure policy: it reconnects and
+            // up. Dropping it is the backpressure policy: it reconnects and
             // catches up through Last-Event-ID, which is cheaper than buffering
             // for a peer that may never read again.
-            subscriber.emitter().completeWithError(e);
+            evict(id, subscriber, e);
         }
     }
 
-    private void heartbeat() {
-        subscribers.forEach(
-                (id, subscriber) -> {
-                    try {
-                        subscriber.emitter().send(SseEmitter.event().name("heartbeat").data("{}"));
-                    } catch (IOException | IllegalStateException e) {
-                        subscriber.emitter().completeWithError(e);
-                    }
-                });
+    /**
+     * Drop a peer that can no longer be written to.
+     *
+     * <p>The order is the point. The map entry goes <strong>first</strong>, so
+     * whatever happens next the peer is never tried again -- and it was the
+     * retrying that hurt: every later broadcast and every heartbeat walked into
+     * the same dead connection.
+     *
+     * <p>Then {@code completeWithError}, guarded. On Tomcat, once the container
+     * has already declared the async request failed, touching it again throws
+     * {@code IllegalStateException} ("a non-container thread attempted to use
+     * the AsyncContext after an error had occurred"). Observed on the running
+     * stack: that exception escaped from here into the operator's
+     * acknowledgement, rolled back its transaction and answered 500; thrown
+     * from the heartbeat thread it silently cancelled every later tick. A peer
+     * the container has given up on needs no farewell from us.
+     */
+    private void evict(String id, Subscriber subscriber, Exception cause) {
+        remove(id);
+        try {
+            subscriber.emitter().completeWithError(cause);
+        } catch (IllegalStateException alreadyDead) {
+            log.debug("sse_peer_already_closed reason={}", alreadyDead.getMessage());
+        }
+    }
+
+    /**
+     * One heartbeat tick. Scheduled in production; invoked directly by the test
+     * that proves a dead peer cannot stop it.
+     *
+     * <p>Nothing may escape this method. {@code scheduleAtFixedRate} cancels
+     * every later run of a task that throws, and it does so silently -- the
+     * failure mode is a stream that looks connected and never proves it again.
+     */
+    public void heartbeat() {
+        try {
+            subscribers.forEach(
+                    (id, subscriber) -> {
+                        try {
+                            subscriber
+                                    .emitter()
+                                    .send(SseEmitter.event().name("heartbeat").data("{}"));
+                        } catch (IOException | IllegalStateException e) {
+                            evict(id, subscriber, e);
+                        }
+                    });
+        } catch (RuntimeException e) {
+            log.error("sse_heartbeat_failed clients={}", subscribers.size(), e);
+        }
     }
 
     private void remove(String id) {
