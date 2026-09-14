@@ -486,6 +486,11 @@ précisément pour que l'artefact ne dépende pas de l'hôte.
   mode d'emploi et rien d'autre ; les liens du README sont cassés tant que les
   images n'existent pas, ce qui se voit et se corrige — contrairement à une
   capture fabriquée.
+  *Mise à jour du 14 septembre 2026* : les cinq captures ont été prises à la
+  main sur la plateforme en marche, après les deux correctifs `945cbc0`
+  (acquittement / SSE) et `3c6c8ff` (graphique des contributeurs) — le second
+  était précisément visible sur la page de détail. Elles sont intégrées dans
+  le README.
 - **Aucun épinglage par digest.** Les images restent référencées par tags,
   mutables. C'est une limite de reproductibilité, écrite comme telle.
 - **Le modèle n'a pas été touché** : ni ré-entraîné, ni recalibré, ni remplacé.
