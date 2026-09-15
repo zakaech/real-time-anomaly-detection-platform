@@ -405,7 +405,7 @@ jobs:
       # that cannot write its pid file, or a Spark job whose Ivy cache landed
       # in an unreadable /root, is a green test suite and a dead container.
       - name: Build every image
-        run: docker compose --env-file .env -f infra/docker-compose.yml build
+        run: docker compose --env-file .env -f infra/docker-compose.yml --profile sim --profile stream build
 
       # Building proves the Dockerfile is valid; it does not prove the image
       # runs as the user it declares. This does.
