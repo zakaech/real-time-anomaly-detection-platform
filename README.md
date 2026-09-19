@@ -736,3 +736,5 @@ simulateur ; SHA-256 de l'artefact, vérifié à chaque démarrage.
 **Documentation détaillée** : [`docs/`](docs/) — conception, topologie Kafka,
 sémantique de streaming, modèle de données, méthodologie ML, et le compte rendu
 de chaque phase avec ses mesures et ses erreurs.
+
+**Licence** : [MIT](LICENSE) — © 2026 Zakariae Echaaouer.

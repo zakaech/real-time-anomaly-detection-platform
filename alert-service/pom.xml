@@ -17,6 +17,13 @@
   <name>alert-service</name>
   <description>Consumes the alerts topic, persists idempotently, and serves the operator API</description>
 
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+    </license>
+  </licenses>
+
   <properties>
     <!-- release, not source/target: it also checks that no API newer than 17 is
          used. The build image is JDK 17, but a developer on JDK 21 would
