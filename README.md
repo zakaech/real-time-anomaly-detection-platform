@@ -456,7 +456,7 @@ directement exécutable, donnée à côté de la commande `make` partout ci-dess
 ### Préparation
 
 ```sh
-git clone <url-du-depot>
+git clone https://github.com/zakaech/real-time-anomaly-detection-platform.git
 cd real-time-anomaly-detection-platform
 
 make env          # ou :  cp .env.example .env
@@ -572,9 +572,9 @@ Comptages relevés lors de l'exécution réelle des suites, pas de mémoire :
 | `event-simulator` | **140** | ruff, format, mypy `--strict`, pytest |
 | `ml-training` | **73** | ruff, format, mypy `--strict`, pytest |
 | `stream-processor` | **97** | ruff, format, mypy `--strict`, pytest |
-| `alert-service` | **63** | `mvn verify`, Testcontainers PostgreSQL |
-| `dashboard` | **29** | Prettier, Vitest + jsdom, build de production |
-| **Total** | **568** | |
+| `alert-service` | **64** | `mvn verify`, Testcontainers PostgreSQL |
+| `dashboard` | **35** | Prettier, Vitest + jsdom, build de production |
+| **Total** | **575** | |
 
 S'y ajoutent, sans compteur de tests : validité JSON Schema Draft 2020-12 des
 contrats, résolution du fichier Compose, `shellcheck` sur les quatre scripts

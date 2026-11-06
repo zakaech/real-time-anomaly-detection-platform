@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/zakaria/real-time-anomaly-detection-platform/contracts/alert.v1.json",
+  "$id": "https://github.com/zakaech/real-time-anomaly-detection-platform/contracts/alert.v1.json",
   "title": "Alert",
   "description": "Anomalie qualifiee, destinee a etre persistee et presentee a un operateur. Topic: alerts",
   "type": "object",

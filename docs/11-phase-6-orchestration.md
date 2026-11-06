@@ -312,7 +312,7 @@ résout. Les quatre images de compose construisent.
 
 ### Test sur clone Git propre
 
-Cloné dans un répertoire temporaire, depuis le commit `434c69e`.
+Cloné dans un répertoire temporaire, depuis le commit `7be40a2`.
 
 > Note : le chemin du répertoire de travail habituel dépassait `MAX_PATH` sous
 > Windows et faisait échouer `git clone` sur un fichier de commit-graph. Le clone
@@ -487,8 +487,8 @@ précisément pour que l'artefact ne dépende pas de l'hôte.
   images n'existent pas, ce qui se voit et se corrige — contrairement à une
   capture fabriquée.
   *Mise à jour du 14 septembre 2026* : les cinq captures ont été prises à la
-  main sur la plateforme en marche, après les deux correctifs `945cbc0`
-  (acquittement / SSE) et `3c6c8ff` (graphique des contributeurs) — le second
+  main sur la plateforme en marche, après les deux correctifs `ce7a03f`
+  (acquittement / SSE) et `69d765c` (graphique des contributeurs) — le second
   était précisément visible sur la page de détail. Elles sont intégrées dans
   le README.
 - **Aucun épinglage par digest.** Les images restent référencées par tags,

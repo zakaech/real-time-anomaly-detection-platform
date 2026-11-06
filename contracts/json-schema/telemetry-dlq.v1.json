@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/zakaria/real-time-anomaly-detection-platform/contracts/telemetry-dlq.v1.json",
+  "$id": "https://github.com/zakaech/real-time-anomaly-detection-platform/contracts/telemetry-dlq.v1.json",
   "title": "DlqEnvelope",
   "description": "Un message rejete parce que ses DONNEES sont invalides. Topic: telemetry.dlq. Une panne transitoire d'infrastructure ne doit jamais arriver ici: elle releve du retry et du checkpoint. Confondre les deux revient a jeter des messages parfaitement valides pendant une panne de broker.",
   "type": "object",
